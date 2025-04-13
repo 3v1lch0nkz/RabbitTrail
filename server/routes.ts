@@ -62,75 +62,12 @@ const upload = multer({
   }
 });
 
-// Security headers middleware
-const securityHeadersMiddleware = (req: Request, res: Response, next: Function) => {
-  // CSP completely disabled for development to fix map marker issues
-  // IMPORTANT: Re-enable with appropriate policy for production
-  // res.setHeader('Content-Security-Policy', "...");
-  
-  // Prevent clickjacking attacks
-  res.setHeader('X-Frame-Options', 'DENY');
-  
-  // XSS protection
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  
-  // Prevent MIME type sniffing
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  
-  // Enforce HTTPS
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  
-  // Referrer policy
-  res.setHeader('Referrer-Policy', 'same-origin');
-  
-  // Feature policy
-  res.setHeader('Permissions-Policy', 'geolocation=*, camera=()');
-  
-  next();
-};
-
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Apply security headers
-  app.use(securityHeadersMiddleware);
-  
   // Sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
   
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-  
-  // Serve static files from client/public directory
-  app.use(express.static(path.join(process.cwd(), 'client/public')));
-  
-  // Serve robots.txt - restrict search engine crawling of user data
-  app.get('/robots.txt', (req, res) => {
-    res.type('text/plain');
-    res.send(`# RabbitTrail - Investigation Platform
-# We're restricting certain crawler access for security and privacy
-
-User-agent: *
-# Allow crawlers to access public pages
-Allow: /
-Allow: /auth
-Allow: /privacy
-Allow: /terms
-Allow: /about
-
-# Disallow crawlers from accessing user-specific content
-Disallow: /projects/
-Disallow: /account
-Disallow: /invitations/
-Disallow: /team/
-Disallow: /settings/
-Disallow: /api/
-
-# Disallow crawlers from accessing uploads directory
-Disallow: /uploads/
-
-# Crawl-delay to prevent server overload
-Crawl-delay: 10
-`);
-  });
   
   // File upload endpoint
   app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {

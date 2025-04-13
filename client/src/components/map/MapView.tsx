@@ -32,19 +32,6 @@ export default function MapView({
   useEffect(() => {
     if (!window.L || !mapRef.current || mapInstanceRef.current) return;
 
-    // Set custom path for marker icons
-    // This fixes the CSP issues with default Leaflet icons
-    if (window.L.Icon.Default.imagePath) {
-      window.L.Icon.Default.imagePath = '/images/leaflet/';
-    }
-    
-    // For older versions of Leaflet, set the icon URLs directly
-    window.L.Icon.Default.mergeOptions({
-      iconUrl: '/images/leaflet/marker-icon.png',
-      shadowUrl: '/images/leaflet/marker-shadow.png',
-      iconRetinaUrl: '/images/leaflet/marker-icon.png'
-    });
-
     // Default center (San Francisco)
     const defaultCenter = [37.7749, -122.4194];
     
@@ -94,19 +81,31 @@ export default function MapView({
     // Create bounds to fit all markers
     const bounds = window.L.latLngBounds();
     
-    // We'll use the default Leaflet marker instead of custom icons
-    // Just create a marker without custom icon
-    function getEntryTypeClass(entry: Entry): string {
-      // Set a CSS class based on entry type for popup styling
-      if (entry.mediaUrlImage) {
-        return "evidence";
-      } else if (entry.mediaUrlAudio) {
-        return "interview";
-      } else if (entry.title.toLowerCase().includes("found") || 
-                 entry.title.toLowerCase().includes("spotted")) {
-        return "lead";
-      }
-      return "default";
+    // Custom icon function
+    function createCustomIcon(entryType: string) {
+      const markerColor = entryType === 'evidence' ? '#047857' : 
+                          entryType === 'lead' ? '#C2410C' : 
+                          entryType === 'interview' ? '#4F46E5' : '#6B7280';
+      
+      const markerHtmlStyles = `
+        background-color: ${markerColor};
+        width: 2rem;
+        height: 2rem;
+        display: block;
+        left: -1rem;
+        top: -1rem;
+        position: relative;
+        border-radius: 2rem 2rem 0;
+        transform: rotate(45deg);
+        border: 1px solid #FFFFFF
+      `;
+      
+      return window.L.divIcon({
+        className: "custom-pin",
+        iconAnchor: [0, 24],
+        popupAnchor: [0, -36],
+        html: `<span style="${markerHtmlStyles}" />`
+      });
     }
     
     // Add markers for each entry
@@ -118,13 +117,13 @@ export default function MapView({
       
       if (isNaN(lat) || isNaN(lng)) return;
       
-      // Use standard Leaflet marker
-      const marker = window.L.marker([lat, lng]).addTo(mapInstanceRef.current);
+      const marker = window.L.marker([lat, lng], { 
+        icon: createCustomIcon(entry.entryType) 
+      }).addTo(mapInstanceRef.current);
       
-      // Add popup with entry title and type class
-      const entryTypeClass = getEntryTypeClass(entry);
+      // Add popup with entry title
       marker.bindPopup(`
-        <div class="font-medium entry-${entryTypeClass}">${entry.title}</div>
+        <div class="font-medium">${entry.title}</div>
         <div class="text-xs text-gray-600 mt-1">Click to view details</div>
       `);
       

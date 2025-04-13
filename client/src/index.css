@@ -15,13 +15,6 @@
   z-index: 99; /* For dialog overlay */
 }
 
-/* Map styling */
-.leaflet-marker-pane img {
-  /* Fix for marker images */
-  width: 100% !important;
-  height: 100% !important;
-}
-
 @layer base {
   * {
     @apply border-border;

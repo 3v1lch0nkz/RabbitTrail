@@ -134,23 +134,14 @@ export default function LandingPage() {
               <h3 className="text-xl font-bold">RabbitTrail</h3>
               <p className="text-sm text-gray-400">Follow the trail, see how deep it goes.</p>
             </div>
-            <div className="flex flex-wrap justify-center gap-6 md:gap-x-6">
+            <div className="flex space-x-6">
               <Link href="/auth" className="text-gray-300 hover:text-white">Sign In</Link>
               <Link href="/auth" className="text-gray-300 hover:text-white">Register</Link>
               <a href="#features" className="text-gray-300 hover:text-white">Features</a>
-              <a href="/about.html" className="text-gray-300 hover:text-white">About</a>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-gray-800 text-sm">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-gray-500">
-                &copy; {new Date().getFullYear()} RabbitTrail. All rights reserved.
-              </div>
-              <div className="flex gap-6 mt-4 md:mt-0">
-                <a href="/privacy.html" className="text-gray-500 hover:text-gray-300">Privacy Policy</a>
-                <a href="/terms.html" className="text-gray-500 hover:text-gray-300">Terms of Service</a>
-              </div>
-            </div>
+          <div className="mt-8 pt-8 border-t border-gray-800 text-center text-sm text-gray-500">
+            &copy; {new Date().getFullYear()} RabbitTrail. All rights reserved.
           </div>
         </div>
       </footer>
