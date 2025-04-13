@@ -45,9 +45,8 @@ const formSchema = insertEntrySchema
   .extend({
     title: z.string().min(1, "Title is required"),
     description: z.string().optional(),
-    // File uploads would be handled differently in production
-    imageFile: z.any().optional(),
-    audioFile: z.any().optional(),
+    // File uploads are handled differently
+    mediaFile: z.any().optional(),
   });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -63,6 +62,11 @@ const NewEntryModal = ({
   const { toast } = useToast();
   const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(null);
   const [addressSearch, setAddressSearch] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState<Array<{
+    description: string;
+    place_id: string;
+  }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -74,11 +78,35 @@ const NewEntryModal = ({
       links: [],
       mediaUrlImage: "",
       mediaUrlAudio: "",
-      imageFile: undefined,
-      audioFile: undefined,
+      mediaFile: undefined,
     },
   });
   
+  // Address suggestion mutation
+  const suggestAddressMutation = useMutation({
+    mutationFn: async (query: string) => {
+      if (!query.trim() || query.length < 3) return [];
+      
+      // Make a request to get address suggestions from the server
+      const res = await fetch(`/api/address-suggest?query=${encodeURIComponent(query)}`);
+      
+      if (!res.ok) {
+        throw new Error("Failed to get address suggestions");
+      }
+      
+      const suggestions = await res.json();
+      return suggestions.results || [];
+    },
+    onSuccess: (data) => {
+      setSearchSuggestions(data);
+      setShowSuggestions(data.length > 0);
+    },
+    onError: () => {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    }
+  });
+
   // Geocoding mutation
   const geocodeMutation = useMutation({
     mutationFn: async (address: string) => {
@@ -104,6 +132,7 @@ const NewEntryModal = ({
       setSelectedLocation([lat, lng]);
       form.setValue("latitude", lat.toString());
       form.setValue("longitude", lng.toString());
+      setShowSuggestions(false);
       toast({
         title: "Location found",
         description: `Found location: ${data.formatted}`,
@@ -117,6 +146,19 @@ const NewEntryModal = ({
       });
     },
   });
+  
+  // Handle address input change with debounce
+  useEffect(() => {
+    const debounceId = setTimeout(() => {
+      if (addressSearch.trim().length >= 3) {
+        suggestAddressMutation.mutate(addressSearch);
+      } else {
+        setShowSuggestions(false);
+      }
+    }, 300);
+    
+    return () => clearTimeout(debounceId);
+  }, [addressSearch]);
 
   // Set form values when editing an entry
   useEffect(() => {
@@ -129,6 +171,7 @@ const NewEntryModal = ({
         links: editEntry.links || [],
         mediaUrlImage: editEntry.mediaUrlImage || "",
         mediaUrlAudio: editEntry.mediaUrlAudio || "",
+        mediaFile: undefined,
       });
 
       if (editEntry.latitude && editEntry.longitude) {
@@ -146,8 +189,7 @@ const NewEntryModal = ({
         links: [],
         mediaUrlImage: "",
         mediaUrlAudio: "",
-        imageFile: undefined,
-        audioFile: undefined,
+        mediaFile: undefined,
       });
       setSelectedLocation(null);
     }
@@ -175,50 +217,27 @@ const NewEntryModal = ({
 
   const handleSubmit = async (data: FormValues) => {
     try {
-      // Calculate total file size
-      const imageFileSize = data.imageFile ? data.imageFile.size : 0;
-      const audioFileSize = data.audioFile ? data.audioFile.size : 0;
-      const totalFileSize = imageFileSize + audioFileSize;
-      const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
-      
-      // Validate total file size
-      if (totalFileSize > MAX_TOTAL_SIZE) {
-        const imageSizeMB = (imageFileSize / (1024 * 1024)).toFixed(2);
-        const audioSizeMB = (audioFileSize / (1024 * 1024)).toFixed(2);
-        const totalSizeMB = (totalFileSize / (1024 * 1024)).toFixed(2);
-        
-        toast({
-          title: "Files too large",
-          description: `Total file size (${totalSizeMB}MB) exceeds the 100MB limit. Image: ${imageSizeMB}MB, Media: ${audioSizeMB}MB`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      // Handle image file upload if present
+      // Handle media file upload if present
       let mediaUrlImage = data.mediaUrlImage;
-      if (data.imageFile) {
-        const formData = new FormData();
-        formData.append('file', data.imageFile);
-        
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to upload image');
-        }
-        
-        const result = await response.json();
-        mediaUrlImage = result.filePath;
-      }
-      
-      // Handle media file upload if present (audio, video, text)
       let mediaUrlAudio = data.mediaUrlAudio;
-      if (data.audioFile) {
+      
+      if (data.mediaFile) {
+        const file = data.mediaFile;
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+        
+        // Validate file size
+        if (file.size > MAX_SIZE) {
+          toast({
+            title: "File too large",
+            description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
+            variant: "destructive"
+          });
+          return;
+        }
+        
         const formData = new FormData();
-        formData.append('file', data.audioFile);
+        formData.append('file', file);
         
         const response = await fetch('/api/upload', {
           method: 'POST',
@@ -226,11 +245,18 @@ const NewEntryModal = ({
         });
         
         if (!response.ok) {
-          throw new Error(`Failed to upload ${data.audioFile.type.split('/')[0]}`);
+          throw new Error(`Failed to upload ${file.type.split('/')[0]}`);
         }
         
         const result = await response.json();
-        mediaUrlAudio = result.filePath;
+        
+        // Determine file type from MIME type and store in appropriate field
+        if (file.type.startsWith('image/')) {
+          mediaUrlImage = result.filePath;
+        } else {
+          // Audio, video, or text file
+          mediaUrlAudio = result.filePath;
+        }
       }
       
       // Submit the entry with proper file URLs
@@ -305,27 +331,55 @@ const NewEntryModal = ({
               <FormLabel>Location</FormLabel>
               
               {/* Address search input */}
-              <div className="flex gap-2 mb-2">
-                <Input
-                  placeholder="Search address or place"
-                  value={addressSearch}
-                  onChange={(e) => setAddressSearch(e.target.value)}
-                  className="flex-1"
-                />
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="px-3 py-2 flex items-center justify-center" 
-                  onClick={() => geocodeMutation.mutate(addressSearch)}
-                  disabled={!addressSearch || geocodeMutation.isPending}
-                  title="Search for address"
-                >
-                  {geocodeMutation.isPending ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Search className="h-5 w-5" />
-                  )}
-                </Button>
+              <div className="relative">
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    placeholder="Search address or place"
+                    value={addressSearch}
+                    onChange={(e) => setAddressSearch(e.target.value)}
+                    className="flex-1"
+                    onFocus={() => showSuggestions && setShowSuggestions(true)}
+                    onBlur={() => {
+                      // Small delay to allow clicking on suggestions
+                      setTimeout(() => setShowSuggestions(false), 200);
+                    }}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="px-3 py-2 flex items-center justify-center" 
+                    onClick={() => geocodeMutation.mutate(addressSearch)}
+                    disabled={!addressSearch || geocodeMutation.isPending}
+                    title="Search for address"
+                  >
+                    {geocodeMutation.isPending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Search className="h-5 w-5" />
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Address suggestions dropdown */}
+                {showSuggestions && searchSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    <ul className="py-1">
+                      {searchSuggestions.map((suggestion, index) => (
+                        <li 
+                          key={suggestion.place_id || index}
+                          className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+                          onClick={() => {
+                            setAddressSearch(suggestion.description);
+                            geocodeMutation.mutate(suggestion.description);
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          {suggestion.description}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
               
               <div className="flex gap-2">
@@ -387,110 +441,71 @@ const NewEntryModal = ({
             
             <div className="space-y-2">
               <FormLabel>Media (Max 100MB per entry)</FormLabel>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="imageFile"
-                  render={({ field: { value, onChange, ...fieldProps } }) => (
-                    <FormItem>
-                      <FormControl>
-                        <div className="border-2 border-dashed border-gray-300 rounded-md p-6 flex flex-col items-center">
-                          <label 
-                            htmlFor="image-upload" 
-                            className="cursor-pointer flex flex-col items-center"
-                          >
-                            <Upload className="w-8 h-8 text-gray-400" />
-                            <p className="mt-1 text-sm text-gray-500">Upload image</p>
-                            <p className="text-xs text-gray-400 text-center">JPG, PNG, GIF, WebP, SVG</p>
-                            <input
-                              id="image-upload"
-                              type="file"
-                              className="hidden"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  // Show file size 
-                                  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-                                  if (file.size > 100 * 1024 * 1024) {
-                                    toast({
-                                      title: "File too large",
-                                      description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
-                                      variant: "destructive"
-                                    });
-                                    return;
-                                  }
-                                  onChange(file);
+              <FormField
+                control={form.control}
+                name="mediaFile"
+                render={({ field: { value, onChange, ...fieldProps } }) => (
+                  <FormItem>
+                    <FormControl>
+                      <div className="border-2 border-dashed border-gray-300 rounded-md p-6 flex flex-col items-center">
+                        <label 
+                          htmlFor="media-upload" 
+                          className="cursor-pointer flex flex-col items-center"
+                        >
+                          <Upload className="w-8 h-8 text-gray-400" />
+                          <p className="mt-1 text-sm text-gray-500">Upload media</p>
+                          <p className="text-xs text-gray-400 text-center">
+                            Images: JPG, PNG, GIF, WebP, SVG
+                          </p>
+                          <p className="text-xs text-gray-400 text-center">
+                            Other: Audio, Video, Text files
+                          </p>
+                          <input
+                            id="media-upload"
+                            type="file"
+                            className="hidden"
+                            accept="image/*,audio/*,video/*,text/plain"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                // Show file size 
+                                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                                if (file.size > 100 * 1024 * 1024) {
+                                  toast({
+                                    title: "File too large",
+                                    description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
+                                    variant: "destructive"
+                                  });
+                                  return;
                                 }
-                              }}
-                              {...fieldProps}
-                            />
-                          </label>
-                          {(value || form.watch("mediaUrlImage")) && (
-                            <div className="mt-2 text-xs text-green-600">
-                              {value?.name || "Image uploaded"}
-                              {value && ` (${(value.size / (1024 * 1024)).toFixed(2)}MB)`}
-                            </div>
-                          )}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="audioFile"
-                  render={({ field: { value, onChange, ...fieldProps } }) => (
-                    <FormItem>
-                      <FormControl>
-                        <div className="border-2 border-dashed border-gray-300 rounded-md p-6 flex flex-col items-center">
-                          <label 
-                            htmlFor="audio-upload" 
-                            className="cursor-pointer flex flex-col items-center"
-                          >
-                            <Paperclip className="w-8 h-8 text-gray-400" />
-                            <p className="mt-1 text-sm text-gray-500">Upload media</p>
-                            <p className="text-xs text-gray-400 text-center">Audio, Video, Text files</p>
-                            <input
-                              id="audio-upload"
-                              type="file"
-                              className="hidden"
-                              accept="audio/*,video/*,text/plain"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  // Show file size 
-                                  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-                                  if (file.size > 100 * 1024 * 1024) {
-                                    toast({
-                                      title: "File too large",
-                                      description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
-                                      variant: "destructive"
-                                    });
-                                    return;
-                                  }
-                                  onChange(file);
-                                }
-                              }}
-                              {...fieldProps}
-                            />
-                          </label>
-                          {(value || form.watch("mediaUrlAudio")) && (
-                            <div className="mt-2 text-xs text-green-600">
-                              {value?.name || "Media uploaded"}
-                              {value && ` (${(value.size / (1024 * 1024)).toFixed(2)}MB)`}
-                            </div>
-                          )}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Total upload size per entry should be less than 100MB.</p>
+                                onChange(file);
+                              }
+                            }}
+                            {...fieldProps}
+                          />
+                        </label>
+                        {value && (
+                          <div className="mt-2 text-xs text-green-600">
+                            {value.name} ({(value.size / (1024 * 1024)).toFixed(2)}MB)
+                            <p className="text-xs text-gray-500">
+                              {value.type.startsWith('image/') ? 'Image' : 
+                               value.type.startsWith('audio/') ? 'Audio' : 
+                               value.type.startsWith('video/') ? 'Video' : 'Text'} file
+                            </p>
+                          </div>
+                        )}
+                        {(!value && (form.watch("mediaUrlImage") || form.watch("mediaUrlAudio"))) && (
+                          <div className="mt-2 text-xs text-green-600">
+                            Media already uploaded
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <p className="text-xs text-gray-500 mt-1">Maximum file size is 100MB.</p>
             </div>
             
             <FormField
