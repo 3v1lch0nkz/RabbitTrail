@@ -5,7 +5,7 @@ import { Project, Entry, User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Users } from "lucide-react";
+import { Users, MoreVertical } from "lucide-react";
 import Header from "@/components/layout/header";
 import MobileNav from "@/components/layout/mobile-nav";
 import ProjectSidebar from "@/components/layout/project-sidebar";
@@ -13,7 +13,15 @@ import EntryList from "@/components/entries/entry-list";
 import MapComponent from "@/components/map/map-component";
 import NewEntryModal from "@/components/modals/new-entry-modal";
 import ShareProjectModal from "@/components/modals/share-project-modal";
+import ProjectActionsModal from "@/components/modals/project-actions-modal";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const ProjectPage = () => {
   const [match, params] = useRoute<{ id: string }>("/projects/:id");
@@ -22,6 +30,7 @@ const ProjectPage = () => {
   const projectId = parseInt(params?.id || "0");
   const [isNewEntryModalOpen, setIsNewEntryModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isProjectActionsModalOpen, setIsProjectActionsModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | undefined>(undefined);
   const [selectedEntry, setSelectedEntry] = useState<Entry | undefined>(undefined);
   const [mapCenter, setMapCenter] = useState<[number, number] | undefined>(undefined);
@@ -57,10 +66,13 @@ const ProjectPage = () => {
   // Fetch collaborators
   const {
     data: collaborators = []
-  } = useQuery<(User)[]>({
+  } = useQuery<User[]>({
     queryKey: [`/api/projects/${projectId}/collaborators`],
     enabled: !!projectId,
-    select: (data) => data.map(collab => collab.user),
+    // Transform the data to extract user objects
+    select: (data: any[]) => {
+      return data.map(collab => collab.user || collab);
+    },
   });
   
   // Center map on first entry if available
@@ -204,6 +216,11 @@ const ProjectPage = () => {
     setIsShareModalOpen(true);
   };
   
+  // Open project actions modal
+  const handleOpenProjectActionsModal = () => {
+    setIsProjectActionsModalOpen(true);
+  };
+  
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
@@ -263,6 +280,7 @@ const ProjectPage = () => {
                 onAddEntry={handleAddEntry}
                 onEditEntry={handleEditEntry}
                 onDeleteEntry={handleDeleteEntry}
+                onProjectActions={handleOpenProjectActionsModal}
               />
               
               {/* Project Collaborators Section */}
@@ -320,6 +338,15 @@ const ProjectPage = () => {
           onClose={() => setIsShareModalOpen(false)}
           project={project}
           currentUser={user}
+        />
+      )}
+      
+      {/* Project Actions Modal */}
+      {project && (
+        <ProjectActionsModal 
+          isOpen={isProjectActionsModalOpen}
+          onClose={() => setIsProjectActionsModalOpen(false)}
+          project={project}
         />
       )}
     </div>

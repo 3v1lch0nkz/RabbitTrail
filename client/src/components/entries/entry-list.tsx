@@ -20,6 +20,7 @@ interface EntryListProps {
   onAddEntry: () => void;
   onEditEntry: (entry: Entry) => void;
   onDeleteEntry: (entryId: number) => void;
+  onProjectActions?: () => void;
 }
 
 type SortOption = "newest" | "oldest" | "alphabetical";
@@ -31,7 +32,8 @@ const EntryList = ({
   users,
   onAddEntry, 
   onEditEntry, 
-  onDeleteEntry 
+  onDeleteEntry,
+  onProjectActions
 }: EntryListProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewType, setViewType] = useState<"list" | "timeline">("list");
@@ -82,8 +84,9 @@ const EntryList = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Project Settings</DropdownMenuItem>
-                <DropdownMenuItem>Export Data</DropdownMenuItem>
+                <DropdownMenuItem onClick={onProjectActions}>
+                  Project Actions
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
