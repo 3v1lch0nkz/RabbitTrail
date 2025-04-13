@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertEntrySchema, Entry } from "@shared/schema";
-import { X, Paperclip, Upload, MapPin } from "lucide-react";
+import { X, Paperclip, Upload, MapPin, Search, Loader2 } from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
@@ -26,6 +26,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import MapComponent from "@/components/map/map-component";
+import { useMutation } from "@tanstack/react-query";
+import opencage from "opencage-api-client";
+import { useToast } from "@/hooks/use-toast";
 
 interface NewEntryModalProps {
   isOpen: boolean;
@@ -57,7 +60,9 @@ const NewEntryModal = ({
   userId,
   editEntry 
 }: NewEntryModalProps) => {
+  const { toast } = useToast();
   const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(null);
+  const [addressSearch, setAddressSearch] = useState("");
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -71,6 +76,45 @@ const NewEntryModal = ({
       mediaUrlAudio: "",
       imageFile: undefined,
       audioFile: undefined,
+    },
+  });
+  
+  // Geocoding mutation
+  const geocodeMutation = useMutation({
+    mutationFn: async (address: string) => {
+      // Make a request to our server endpoint that will use the API key
+      // This keeps the API key secure on the server side
+      const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`);
+      
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(error || "Failed to geocode address");
+      }
+      
+      const result = await res.json();
+      
+      if (!result || !result.results || result.results.length === 0) {
+        throw new Error("No results found for this address");
+      }
+      
+      return result.results[0];
+    },
+    onSuccess: (data) => {
+      const { lat, lng } = data.geometry;
+      setSelectedLocation([lat, lng]);
+      form.setValue("latitude", lat.toString());
+      form.setValue("longitude", lng.toString());
+      toast({
+        title: "Location found",
+        description: `Found location: ${data.formatted}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error finding location",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -194,6 +238,31 @@ const NewEntryModal = ({
             
             <div className="space-y-2">
               <FormLabel>Location</FormLabel>
+              
+              {/* Address search input */}
+              <div className="flex gap-2 mb-2">
+                <Input
+                  placeholder="Search address or place"
+                  value={addressSearch}
+                  onChange={(e) => setAddressSearch(e.target.value)}
+                  className="flex-1"
+                />
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="px-3 py-2 flex items-center justify-center" 
+                  onClick={() => geocodeMutation.mutate(addressSearch)}
+                  disabled={!addressSearch || geocodeMutation.isPending}
+                  title="Search for address"
+                >
+                  {geocodeMutation.isPending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Search className="h-5 w-5" />
+                  )}
+                </Button>
+              </div>
+              
               <div className="flex gap-2">
                 <FormField
                   control={form.control}
@@ -202,9 +271,25 @@ const NewEntryModal = ({
                     <FormItem className="flex-1">
                       <FormControl>
                         <Input 
-                          placeholder="Search location or click on map" 
+                          placeholder="Latitude" 
                           {...field}
-                          readOnly
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="longitude"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Input 
+                          placeholder="Longitude" 
+                          {...field}
+                          value={field.value || ""}
                         />
                       </FormControl>
                       <FormMessage />

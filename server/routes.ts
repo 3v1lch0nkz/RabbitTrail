@@ -8,6 +8,7 @@ import {
   insertProjectCollaboratorSchema 
 } from "@shared/schema";
 import { z } from "zod";
+import opencage from "opencage-api-client";
 
 // Auth middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: Function) => {
