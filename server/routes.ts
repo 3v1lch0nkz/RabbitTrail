@@ -493,6 +493,131 @@ app.get("/api/projects/:id/export", isAuthenticated, async (req, res) => {
     }
   });
 
+  // Invitation management endpoints
+  app.get("/api/projects/:projectId/invitations", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.projectId);
+      const userId = req.user?.id;
+      
+      // Check if user is the owner
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      if (project.ownerId !== userId) {
+        return res.status(403).json({ message: "Only the owner can view invitations" });
+      }
+      
+      const invitations = await storage.getProjectInvitations(projectId);
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error getting invitations:", error);
+      res.status(500).json({ message: "Failed to fetch invitations" });
+    }
+  });
+  
+  app.get("/api/invitations/:token", async (req, res) => {
+    try {
+      const token = req.params.token;
+      const invitation = await storage.getInvitationByToken(token);
+      
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+      
+      // Check if invitation is expired
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        return res.status(410).json({ message: "Invitation has expired" });
+      }
+      
+      // Check if invitation has already been accepted
+      if (invitation.status !== "pending") {
+        return res.status(410).json({ message: "Invitation has already been used" });
+      }
+      
+      // Get project details to include in response
+      const project = await storage.getProject(invitation.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      res.json({
+        invitation,
+        project: {
+          id: project.id,
+          title: project.title,
+          description: project.description
+        }
+      });
+    } catch (error) {
+      console.error("Error getting invitation:", error);
+      res.status(500).json({ message: "Failed to fetch invitation" });
+    }
+  });
+  
+  app.post("/api/invitations/:token/accept", isAuthenticated, async (req, res) => {
+    try {
+      const token = req.params.token;
+      const userId = req.user?.id;
+      
+      const invitation = await storage.getInvitationByToken(token);
+      if (!invitation) {
+        return res.status(404).json({ message: "Invitation not found" });
+      }
+      
+      // Check if invitation is expired
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        return res.status(410).json({ message: "Invitation has expired" });
+      }
+      
+      // Check if invitation has already been accepted
+      if (invitation.status !== "pending") {
+        return res.status(410).json({ message: "Invitation has already been used" });
+      }
+      
+      // Verify the user's email matches the invitation email
+      const user = await storage.getUser(userId);
+      if (!user || user.email !== invitation.email) {
+        return res.status(403).json({ 
+          message: "You cannot accept an invitation sent to a different email address" 
+        });
+      }
+      
+      // Add user as collaborator
+      const collaboratorData = insertProjectCollaboratorSchema.parse({
+        projectId: invitation.projectId,
+        userId,
+        role: invitation.role
+      });
+      
+      const newCollaborator = await storage.addProjectCollaborator(collaboratorData);
+      
+      // Update invitation status
+      await storage.updateInvitationStatus(invitation.id, "accepted");
+      
+      res.status(200).json({ 
+        success: true, 
+        collaborator: newCollaborator,
+        message: "Invitation accepted successfully" 
+      });
+    } catch (error) {
+      console.error("Error accepting invitation:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to accept invitation" });
+    }
+  });
+  
+  // Endpoint to handle registration from invitation
+  app.get("/invite/:token", async (req, res) => {
+    const token = req.params.token;
+    
+    // Redirect to auth page with invitation token as query parameter
+    res.redirect(`/auth?invitation=${token}`);
+  });
+  
   // Geocoding endpoint
   app.get("/api/geocode", async (req, res) => {
     try {
