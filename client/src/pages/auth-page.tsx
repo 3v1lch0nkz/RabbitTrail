@@ -113,7 +113,7 @@ const AuthPage = () => {
         title: "Login successful",
         description: `Welcome back, ${user.displayName || user.username}!`,
       });
-      navigate("/");
+      navigate("/dashboard");
     },
     onError: (error: Error) => {
       toast({
@@ -136,7 +136,7 @@ const AuthPage = () => {
         title: "Registration successful",
         description: `Welcome to RabbitTrail, ${user.displayName || user.username}!`,
       });
-      navigate("/");
+      navigate("/dashboard");
     },
     onError: (error: Error) => {
       toast({
@@ -179,7 +179,7 @@ const AuthPage = () => {
         title: "Success",
         description: "You have joined the project!",
       });
-      navigate("/");
+      navigate("/dashboard");
     },
     onError: (error: Error) => {
       toast({
