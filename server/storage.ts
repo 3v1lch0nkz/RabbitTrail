@@ -433,7 +433,7 @@ export class DatabaseStorage implements IStorage {
 
   async createEntry(insertEntry: InsertEntry): Promise<Entry> {
     // Normalize NULL values for optional fields
-    const entryWithDefaults = {
+    const entryData = {
       title: insertEntry.title,
       projectId: insertEntry.projectId,
       createdById: insertEntry.createdById,
@@ -442,12 +442,13 @@ export class DatabaseStorage implements IStorage {
       longitude: insertEntry.longitude ?? null,
       mediaUrlImage: insertEntry.mediaUrlImage ?? null,
       mediaUrlAudio: insertEntry.mediaUrlAudio ?? null,
-      links: insertEntry.links ?? null
+      // Ensure links is properly converted to JSONB - null if not provided
+      links: insertEntry.links ? JSON.stringify(insertEntry.links) : null
     };
     
     const [entry] = await db
       .insert(entries)
-      .values(entryWithDefaults)
+      .values(entryData)
       .returning();
     
     return entry;
@@ -455,10 +456,19 @@ export class DatabaseStorage implements IStorage {
 
   async updateEntry(id: number, updateData: Partial<Entry>): Promise<Entry> {
     const now = new Date();
+    
+    // Process the links field if it exists
+    const processedData = { ...updateData };
+    
+    if (processedData.links !== undefined) {
+      // If links is provided, stringify it for JSONB
+      processedData.links = processedData.links ? JSON.stringify(processedData.links) : null;
+    }
+    
     const [updatedEntry] = await db
       .update(entries)
       .set({
-        ...updateData,
+        ...processedData,
         updatedAt: now
       })
       .where(eq(entries.id, id))

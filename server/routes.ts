@@ -248,6 +248,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const entryId = parseInt(req.params.id);
       const userId = req.user?.id;
       
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const entry = await storage.getEntry(entryId);
       if (!entry) {
         return res.status(404).json({ message: "Entry not found" });
@@ -271,6 +275,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const projectId = parseInt(req.params.projectId);
       const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Check if user has access to this project
       const hasAccess = await storage.checkProjectAccess(projectId, userId);
