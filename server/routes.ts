@@ -62,6 +62,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projectId = parseInt(req.params.id);
       const userId = req.user?.id;
       
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       // Check if user has access to this project
       const hasAccess = await storage.checkProjectAccess(projectId, userId);
       if (!hasAccess) {
@@ -83,6 +87,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const projectId = parseInt(req.params.id);
       const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Check if user is the owner
       const project = await storage.getProject(projectId);
@@ -106,6 +114,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projectId = parseInt(req.params.id);
       const userId = req.user?.id;
       
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       // Check if user is the owner
       const project = await storage.getProject(projectId);
       if (!project) {
@@ -128,6 +140,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const projectId = parseInt(req.params.projectId);
       const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       
       // Check if user has access to this project
       const hasAccess = await storage.checkProjectAccess(projectId, userId);

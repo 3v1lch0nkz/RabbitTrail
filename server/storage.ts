@@ -317,19 +317,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(projects.ownerId, userId));
     
     // Get projects where user is a collaborator
-    const collaboratorProjectIds = await db.select({
-      projectId: projectCollaborators.projectId
-    })
-    .from(projectCollaborators)
-    .where(eq(projectCollaborators.userId, userId));
+    const collaborations = await db.select()
+      .from(projectCollaborators)
+      .where(eq(projectCollaborators.userId, userId));
     
-    const collaboratorProjects = collaboratorProjectIds.length > 0
-      ? await db.select()
-          .from(projects)
-          .where(
-            projects.id.in(collaboratorProjectIds.map(row => row.projectId))
-          )
-      : [];
+    const collaboratorProjects: Project[] = [];
+    // Handle each collaboration individually to avoid the "in" operator
+    for (const collab of collaborations) {
+      const [project] = await db.select()
+        .from(projects)
+        .where(eq(projects.id, collab.projectId));
+      
+      if (project) {
+        collaboratorProjects.push(project);
+      }
+    }
     
     // Combine and remove duplicates
     const seen = new Set<number>();
