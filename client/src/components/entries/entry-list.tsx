@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, TouchEvent } from "react";
 import { Entry, Project, User } from "@shared/schema";
-import { Search, ArrowUpDown, Plus, MoreVertical } from "lucide-react";
+import { Search, ArrowUpDown, Plus, MoreVertical, ChevronLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,33 +38,50 @@ const EntryList = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [viewType, setViewType] = useState<"list" | "timeline">("list");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
-  const [isFabVisible, setIsFabVisible] = useState(true);
-  const entriesListRef = useRef<HTMLDivElement>(null);
-  const lastScrollTop = useRef(0);
+  const [fabPosition, setFabPosition] = useState<'visible' | 'hidden' | 'dragging'>('visible');
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [currentDragX, setCurrentDragX] = useState<number | null>(null);
   
-  // Scroll detection to show/hide FAB
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!entriesListRef.current) return;
-      
-      const { scrollTop } = entriesListRef.current;
-      // Determine scroll direction
-      if (scrollTop > lastScrollTop.current + 10) {
-        // Scrolling down - hide FAB
-        setIsFabVisible(false);
-      } else if (scrollTop < lastScrollTop.current - 10) {
-        // Scrolling up - show FAB
-        setIsFabVisible(true);
-      }
-      lastScrollTop.current = scrollTop <= 0 ? 0 : scrollTop;
-    };
+  const entriesListRef = useRef<HTMLDivElement>(null);
+  const fabRef = useRef<HTMLDivElement>(null);
+  
+  // Touch handlers for the FAB
+  const handleTouchStart = (e: TouchEvent<HTMLDivElement>) => {
+    setDragStartX(e.touches[0].clientX);
+    setFabPosition('dragging');
+  };
+  
+  const handleTouchMove = (e: TouchEvent<HTMLDivElement>) => {
+    if (dragStartX === null) return;
     
-    const entriesList = entriesListRef.current;
-    if (entriesList) {
-      entriesList.addEventListener('scroll', handleScroll, { passive: true });
-      return () => entriesList.removeEventListener('scroll', handleScroll);
+    const currentX = e.touches[0].clientX;
+    setCurrentDragX(currentX);
+    
+    // If dragged far enough to the right, snap to visible state
+    if (currentX - dragStartX > 50) {
+      setFabPosition('visible');
+    } 
+    // If dragged far enough to the left, snap to hidden state
+    else if (dragStartX - currentX > 50) {
+      setFabPosition('hidden');
     }
-  }, []);
+  };
+  
+  const handleTouchEnd = () => {
+    setDragStartX(null);
+    setCurrentDragX(null);
+    
+    // Snap to either fully visible or fully hidden state
+    if (fabPosition === 'dragging') {
+      // If we didn't drag far enough in either direction, snap back to previous state
+      setFabPosition('visible');
+    }
+  };
+  
+  // Toggle FAB visibility
+  const toggleFabVisibility = () => {
+    setFabPosition(prev => prev === 'visible' ? 'hidden' : 'visible');
+  };
   
   // Find creator for each entry
   const getCreator = (createdById: number): User | undefined => {
@@ -210,14 +227,34 @@ const EntryList = ({
         )}
       </div>
       
-      {/* Add Entry Button (Mobile) */}
+      {/* Swipeable Floating Action Button (Mobile) */}
+      {/* The FAB container */}
       <div 
-        className={`md:hidden fixed bottom-20 right-4 z-50 transition-all duration-300 ${
-          isFabVisible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-16 pointer-events-none'
+        ref={fabRef}
+        className={`md:hidden fixed bottom-20 z-50 flex items-center transition-all duration-300 touch-manipulation ${
+          fabPosition === 'visible' 
+            ? 'right-4 transform translate-x-0' 
+            : fabPosition === 'hidden' 
+              ? 'right-[-56px] transform translate-x-0' 
+              : `right-4 transform ${currentDragX && dragStartX ? `translateX(${currentDragX - dragStartX}px)` : 'translate-x-0'}`
         }`}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
+        {/* FAB Handle */}
+        <div 
+          className="bg-primary/20 rounded-l-full h-12 w-6 flex items-center justify-center cursor-pointer touch-manipulation"
+          onClick={toggleFabVisibility}
+        >
+          <ChevronLeft 
+            className={`h-4 w-4 text-white transition-transform ${fabPosition === 'hidden' ? 'rotate-180' : ''}`} 
+          />
+        </div>
+        
+        {/* Main FAB Button */}
         <Button 
-          className="rounded-full w-16 h-16 shadow-lg p-0 bg-primary hover:bg-primary/90"
+          className="rounded-r-full rounded-l-none w-16 h-16 shadow-lg p-0 bg-primary hover:bg-primary/90"
           onClick={onAddEntry}
         >
           <Plus className="h-8 w-8" />
