@@ -2,12 +2,17 @@ import {
   User, InsertUser, 
   Project, InsertProject, 
   Entry, InsertEntry,
-  ProjectCollaborator, InsertProjectCollaborator
+  ProjectCollaborator, InsertProjectCollaborator,
+  users, projects, projectCollaborators, entries
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { db, pool } from "./db";
+import { eq, and, desc } from "drizzle-orm";
+import connectPg from "connect-pg-simple";
 
 const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   // User methods
@@ -267,4 +272,239 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Database implementation
+export class DatabaseStorage implements IStorage {
+  sessionStore: session.Store;
+
+  constructor() {
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true
+    });
+  }
+
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  // Project methods
+  async getProject(id: number): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project;
+  }
+
+  async getProjectsByUser(userId: number): Promise<Project[]> {
+    // Get projects owned by the user
+    const ownedProjects = await db.select()
+      .from(projects)
+      .where(eq(projects.ownerId, userId));
+    
+    // Get projects where user is a collaborator
+    const collaboratorProjectIds = await db.select({
+      projectId: projectCollaborators.projectId
+    })
+    .from(projectCollaborators)
+    .where(eq(projectCollaborators.userId, userId));
+    
+    const collaboratorProjects = collaboratorProjectIds.length > 0
+      ? await db.select()
+          .from(projects)
+          .where(
+            projects.id.in(collaboratorProjectIds.map(row => row.projectId))
+          )
+      : [];
+    
+    // Combine and remove duplicates
+    const seen = new Set<number>();
+    const allProjects: Project[] = [];
+    
+    for (const project of [...ownedProjects, ...collaboratorProjects]) {
+      if (!seen.has(project.id)) {
+        seen.add(project.id);
+        allProjects.push(project);
+      }
+    }
+    
+    return allProjects;
+  }
+
+  async createProject(insertProject: InsertProject): Promise<Project> {
+    const [project] = await db.insert(projects).values(insertProject).returning();
+    return project;
+  }
+
+  async updateProject(id: number, updateData: Partial<Project>): Promise<Project> {
+    const [updatedProject] = await db
+      .update(projects)
+      .set(updateData)
+      .where(eq(projects.id, id))
+      .returning();
+    
+    if (!updatedProject) {
+      throw new Error("Project not found");
+    }
+    
+    return updatedProject;
+  }
+
+  async deleteProject(id: number): Promise<void> {
+    // Delete all collaborators for this project first
+    await db
+      .delete(projectCollaborators)
+      .where(eq(projectCollaborators.projectId, id));
+    
+    // Delete all entries for this project
+    await db
+      .delete(entries)
+      .where(eq(entries.projectId, id));
+    
+    // Delete the project
+    await db
+      .delete(projects)
+      .where(eq(projects.id, id));
+  }
+
+  async checkProjectAccess(projectId: number, userId: number): Promise<boolean> {
+    // Check if user is the owner
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(
+        eq(projects.id, projectId),
+        eq(projects.ownerId, userId)
+      ));
+    
+    if (project) return true;
+    
+    // Check if user is a collaborator
+    const [collaborator] = await db
+      .select()
+      .from(projectCollaborators)
+      .where(and(
+        eq(projectCollaborators.projectId, projectId),
+        eq(projectCollaborators.userId, userId)
+      ));
+    
+    return !!collaborator;
+  }
+
+  // Entry methods
+  async getEntry(id: number): Promise<Entry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(entries)
+      .where(eq(entries.id, id));
+    
+    return entry;
+  }
+
+  async getEntriesByProject(projectId: number): Promise<Entry[]> {
+    return db
+      .select()
+      .from(entries)
+      .where(eq(entries.projectId, projectId))
+      .orderBy(desc(entries.createdAt));
+  }
+
+  async createEntry(insertEntry: InsertEntry): Promise<Entry> {
+    const [entry] = await db
+      .insert(entries)
+      .values(insertEntry)
+      .returning();
+    
+    return entry;
+  }
+
+  async updateEntry(id: number, updateData: Partial<Entry>): Promise<Entry> {
+    const now = new Date();
+    const [updatedEntry] = await db
+      .update(entries)
+      .set({
+        ...updateData,
+        updatedAt: now
+      })
+      .where(eq(entries.id, id))
+      .returning();
+    
+    if (!updatedEntry) {
+      throw new Error("Entry not found");
+    }
+    
+    return updatedEntry;
+  }
+
+  async deleteEntry(id: number): Promise<void> {
+    await db
+      .delete(entries)
+      .where(eq(entries.id, id));
+  }
+
+  // Collaborator methods
+  async getProjectCollaborators(projectId: number): Promise<(ProjectCollaborator & { user: User })[]> {
+    // Joint query to get collaborators and their user details
+    const result = await db
+      .select({
+        collaborator: projectCollaborators,
+        user: users
+      })
+      .from(projectCollaborators)
+      .innerJoin(users, eq(projectCollaborators.userId, users.id))
+      .where(eq(projectCollaborators.projectId, projectId));
+    
+    return result.map(row => ({
+      ...row.collaborator,
+      user: row.user
+    }));
+  }
+
+  async addProjectCollaborator(insertCollaborator: InsertProjectCollaborator): Promise<ProjectCollaborator> {
+    // Check if this user is already a collaborator
+    const [existingCollaborator] = await db
+      .select()
+      .from(projectCollaborators)
+      .where(and(
+        eq(projectCollaborators.projectId, insertCollaborator.projectId),
+        eq(projectCollaborators.userId, insertCollaborator.userId)
+      ));
+    
+    if (existingCollaborator) {
+      throw new Error("User is already a collaborator");
+    }
+    
+    const [collaborator] = await db
+      .insert(projectCollaborators)
+      .values(insertCollaborator)
+      .returning();
+    
+    return collaborator;
+  }
+
+  async removeProjectCollaborator(projectId: number, userId: number): Promise<void> {
+    await db
+      .delete(projectCollaborators)
+      .where(and(
+        eq(projectCollaborators.projectId, projectId),
+        eq(projectCollaborators.userId, userId)
+      ));
+  }
+}
+
+// Use the database storage implementation
+export const storage = new DatabaseStorage();

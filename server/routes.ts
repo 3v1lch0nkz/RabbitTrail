@@ -26,6 +26,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/projects", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const projects = await storage.getProjectsByUser(userId);
       res.json(projects);
     } catch (error) {
@@ -36,6 +39,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/projects", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const projectData = insertProjectSchema.parse({
         ...req.body,
         ownerId: userId
@@ -308,6 +314,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to remove collaborator" });
+    }
+  });
+
+  // Geocoding endpoint
+  app.get("/api/geocode", async (req, res) => {
+    try {
+      const address = req.query.address as string;
+      
+      if (!address) {
+        return res.status(400).json({ message: "Address query parameter is required" });
+      }
+      
+      if (!process.env.OPENCAGE_API_KEY) {
+        return res.status(500).json({ message: "Geocoding API key is not configured" });
+      }
+      
+      const result = await opencage.geocode({
+        q: address,
+        key: process.env.OPENCAGE_API_KEY,
+      });
+      
+      if (result.status.code !== 200) {
+        return res.status(result.status.code).json({ 
+          message: `Geocoding error: ${result.status.message}` 
+        });
+      }
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      res.status(500).json({ message: "Failed to geocode address" });
     }
   });
 
