@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Entry, Project } from "@shared/schema";
 import { Loader2 } from "lucide-react";
+import { createEntryMarker } from "./customMarker";
 
 interface MapViewProps {
   entries: Entry[];
@@ -118,8 +119,9 @@ export default function MapView({
       
       if (isNaN(lat) || isNaN(lng)) return;
       
-      // Use the default marker instead of a custom icon
-      const marker = window.L.marker([lat, lng]).addTo(mapInstanceRef.current);
+      // Use our custom SVG marker with appropriate color based on entry type
+      const customIcon = createEntryMarker(window, entry);
+      const marker = window.L.marker([lat, lng], { icon: customIcon }).addTo(mapInstanceRef.current);
       
       // Add popup with entry title and type class
       const entryTypeClass = getEntryTypeClass(entry);
