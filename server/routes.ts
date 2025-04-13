@@ -63,6 +63,20 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Serve robots.txt file
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain');
+    res.send(`User-agent: *
+Allow: /
+Disallow: /auth
+Disallow: /projects
+Disallow: /account
+Disallow: /team
+Disallow: /api/
+
+# Allow only the landing page, disallow all other routes`);
+  });
+  
   // Sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
   
