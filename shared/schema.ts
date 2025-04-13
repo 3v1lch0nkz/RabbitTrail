@@ -26,6 +26,8 @@ export const projects = pgTable("projects", {
   description: text("description"),
   ownerId: integer("owner_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  archived: boolean("archived").default(false),
+  archivedAt: timestamp("archived_at"),
 });
 
 export const insertProjectSchema = createInsertSchema(projects).pick({

@@ -51,3 +51,8 @@ CREATE TABLE IF NOT EXISTS "session" (
   CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
 );
 CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+
+-- Add archive columns to projects table (April 2025 migration)
+ALTER TABLE projects
+ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITH TIME ZONE;

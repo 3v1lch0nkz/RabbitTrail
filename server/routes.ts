@@ -109,6 +109,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Export project data
+app.get("/api/projects/:id/export", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Check if user has access to this project
+      const hasAccess = await storage.checkProjectAccess(projectId, userId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this project" });
+      }
+      
+      // Get all project data
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const entries = await storage.getEntriesByProject(projectId);
+      const collaborators = await storage.getProjectCollaborators(projectId);
+      
+      // Create export object
+      const exportData = {
+        project,
+        entries,
+        collaborators,
+        exportedAt: new Date().toISOString(),
+        exportedBy: userId
+      };
+      
+      res.json(exportData);
+    } catch (error) {
+      console.error("Export error:", error);
+      res.status(500).json({ message: "Failed to export project data" });
+    }
+  });
+  
+  // Archive a project
+  app.patch("/api/projects/:id/archive", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Check if user is the owner
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      if (project.ownerId !== userId) {
+        return res.status(403).json({ message: "Only the owner can archive the project" });
+      }
+      
+      const archivedProject = await storage.updateProject(projectId, { 
+        archived: true,
+        archivedAt: new Date() 
+      });
+      
+      res.json(archivedProject);
+    } catch (error) {
+      console.error("Archive error:", error);
+      res.status(500).json({ message: "Failed to archive project" });
+    }
+  });
+  
+  // Unarchive a project
+  app.patch("/api/projects/:id/unarchive", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Check if user is the owner
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      if (project.ownerId !== userId) {
+        return res.status(403).json({ message: "Only the owner can unarchive the project" });
+      }
+      
+      const unarchivedProject = await storage.updateProject(projectId, { 
+        archived: false,
+        archivedAt: null 
+      });
+      
+      res.json(unarchivedProject);
+    } catch (error) {
+      console.error("Unarchive error:", error);
+      res.status(500).json({ message: "Failed to unarchive project" });
+    }
+  });
+  
   app.delete("/api/projects/:id", isAuthenticated, async (req, res) => {
     try {
       const projectId = parseInt(req.params.id);
