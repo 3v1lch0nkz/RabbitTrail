@@ -81,41 +81,19 @@ export default function MapView({
     // Create bounds to fit all markers
     const bounds = window.L.latLngBounds();
     
-    // Custom icon function
-    function createCustomIcon(entry: Entry) {
-      // Determine entry type based on characteristics
-      let markerColor = "#6B7280"; // Default gray
-      
-      // If entry has an image, consider it evidence (green)
+    // We'll use the default Leaflet marker instead of custom icons
+    // Just create a marker without custom icon
+    function getEntryTypeClass(entry: Entry): string {
+      // Set a CSS class based on entry type for popup styling
       if (entry.mediaUrlImage) {
-        markerColor = "#047857";
-      } 
-      // If entry has audio, consider it an interview (blue)
-      else if (entry.mediaUrlAudio) {
-        markerColor = "#4F46E5";
+        return "evidence";
+      } else if (entry.mediaUrlAudio) {
+        return "interview";
+      } else if (entry.title.toLowerCase().includes("found") || 
+                 entry.title.toLowerCase().includes("spotted")) {
+        return "lead";
       }
-      // If no media but has a title with "found" or "spotted", consider it a lead (orange)
-      else if (entry.title.toLowerCase().includes("found") || 
-               entry.title.toLowerCase().includes("spotted")) {
-        markerColor = "#C2410C";
-      }
-      
-      // Create a simple SVG marker
-      const svgIcon = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-          <circle cx="12" cy="12" r="10" fill="${markerColor}" stroke="white" stroke-width="2"/>
-        </svg>
-      `;
-      
-      // SVG needs to be base64 encoded to work with CSP
-      const encodedSvg = 'data:image/svg+xml;base64,' + btoa(svgIcon);
-      
-      return window.L.icon({
-        iconUrl: encodedSvg,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-        popupAnchor: [0, -12]
-      });
+      return "default";
     }
     
     // Add markers for each entry
@@ -127,13 +105,13 @@ export default function MapView({
       
       if (isNaN(lat) || isNaN(lng)) return;
       
-      const marker = window.L.marker([lat, lng], { 
-        icon: createCustomIcon(entry) 
-      }).addTo(mapInstanceRef.current);
+      // Use the default marker instead of a custom icon
+      const marker = window.L.marker([lat, lng]).addTo(mapInstanceRef.current);
       
-      // Add popup with entry title
+      // Add popup with entry title and type class
+      const entryTypeClass = getEntryTypeClass(entry);
       marker.bindPopup(`
-        <div class="font-medium">${entry.title}</div>
+        <div class="font-medium entry-${entryTypeClass}">${entry.title}</div>
         <div class="text-xs text-gray-600 mt-1">Click to view details</div>
       `);
       
