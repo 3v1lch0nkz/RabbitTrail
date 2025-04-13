@@ -9,8 +9,10 @@ import { PlusCircle, Loader2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import Header from "@/components/layout/header";
 import ProjectSidebar from "@/components/layout/project-sidebar";
+import MobileProjectsList from "@/components/layout/mobile-projects-list";
 import MobileNav from "@/components/layout/mobile-nav";
 import { 
   Dialog, 
@@ -103,14 +105,22 @@ const HomePage = () => {
       <Header />
       
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* Desktop sidebar */}
         <ProjectSidebar 
           projects={projects} 
           isLoading={isLoadingProjects}
           onAddProject={openCreateDialog}
         />
         
-        {/* Welcome/Dashboard content */}
-        <main className="flex-1 p-6 flex flex-col items-center justify-center">
+        {/* Mobile projects list */}
+        <MobileProjectsList
+          projects={projects}
+          isLoading={isLoadingProjects}
+          onAddProject={openCreateDialog}
+        />
+        
+        {/* Welcome/Dashboard content - hidden on mobile when projects exist */}
+        <main className={`flex-1 p-6 flex flex-col items-center justify-center ${projects.length > 0 ? 'hidden md:flex' : ''}`}>
           <div className="max-w-xl w-full text-center space-y-6">
             <h1 className="text-3xl font-bold text-gray-900">Welcome to RabbitTrail</h1>
             <p className="text-lg text-gray-600">
@@ -139,7 +149,7 @@ const HomePage = () => {
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">Your projects</h2>
                 <p className="text-gray-600 mb-6">
                   You have {projects.length} project{projects.length !== 1 ? 's' : ''}. 
-                  Select a project from the sidebar or create a new one.
+                  Select a project to continue your investigation.
                 </p>
                 <Button onClick={openCreateDialog}>
                   Create a New Project
