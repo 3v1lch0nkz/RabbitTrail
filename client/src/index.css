@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom z-index styles for map and dialog fixes */
+.leaflet-container {
+  z-index: 10;
+}
+
+[data-state="open"][role="dialog"] {
+  z-index: 100;
+}
+
+[role="dialog"] + div[data-state="open"] {
+  z-index: 99; /* For dialog overlay */
+}
+
 @layer base {
   * {
     @apply border-border;
