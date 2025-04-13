@@ -421,8 +421,15 @@ const NewEntryModal = ({
                       {searchSuggestions.map((suggestion, index) => (
                         <li 
                           key={suggestion.place_id || index}
-                          className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+                          className="px-4 py-3 text-sm hover:bg-gray-100 active:bg-gray-200 cursor-pointer flex items-center gap-2"
                           onClick={() => {
+                            setAddressSearch(suggestion.description);
+                            geocodeMutation.mutate(suggestion.description);
+                            setShowSuggestions(false);
+                          }}
+                          // Added touch events for better mobile experience
+                          onTouchStart={() => {}}
+                          onTouchEnd={() => {
                             setAddressSearch(suggestion.description);
                             geocodeMutation.mutate(suggestion.description);
                             setShowSuggestions(false);
@@ -473,12 +480,12 @@ const NewEntryModal = ({
                 <Button 
                   type="button" 
                   variant="secondary" 
-                  className="px-3 py-2 flex items-center justify-center gap-1" 
+                  className="px-2 sm:px-3 py-2 flex items-center justify-center gap-1" 
                   onClick={handleUseMyLocation}
                   title="Use GPS location from your device"
                 >
                   <MapPin className="h-4 w-4" />
-                  <span className="text-xs sm:text-sm whitespace-nowrap">Use GPS</span>
+                  <span className="text-[10px] sm:text-xs whitespace-nowrap">Use GPS</span>
                 </Button>
               </div>
               
