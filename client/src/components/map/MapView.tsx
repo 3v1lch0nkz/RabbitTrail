@@ -83,28 +83,16 @@ export default function MapView({
     
     // Custom icon function
     function createCustomIcon(entryType: string) {
-      const markerColor = entryType === 'evidence' ? '#047857' : 
-                          entryType === 'lead' ? '#C2410C' : 
-                          entryType === 'interview' ? '#4F46E5' : '#6B7280';
-      
-      const markerHtmlStyles = `
-        background-color: ${markerColor};
-        width: 2rem;
-        height: 2rem;
-        display: block;
-        left: -1rem;
-        top: -1rem;
-        position: relative;
-        border-radius: 2rem 2rem 0;
-        transform: rotate(45deg);
-        border: 1px solid #FFFFFF
-      `;
+      // Use CSS classes instead of inline styles
+      const markerClassName = entryType === 'evidence' ? 'marker-evidence' : 
+                             entryType === 'lead' ? 'marker-lead' : 
+                             entryType === 'interview' ? 'marker-interview' : '';
       
       return window.L.divIcon({
-        className: "custom-pin",
+        className: "",
         iconAnchor: [0, 24],
         popupAnchor: [0, -36],
-        html: `<span style="${markerHtmlStyles}" />`
+        html: `<span class="custom-pin ${markerClassName}"></span>`
       });
     }
     
