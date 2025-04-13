@@ -56,3 +56,15 @@ CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
 ALTER TABLE projects
 ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITH TIME ZONE;
+
+-- Create Project Invitations table (April 2025 migration)
+CREATE TABLE IF NOT EXISTS project_invitations (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'editor',
+  token TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  status TEXT NOT NULL DEFAULT 'pending'
+);

@@ -416,22 +416,56 @@ app.get("/api/projects/:id/export", isAuthenticated, async (req, res) => {
       // Find user by email
       const collaboratorEmail = req.body.email;
       const collaborator = await storage.getUserByEmail(collaboratorEmail);
-      if (!collaborator) {
-        return res.status(404).json({ message: "User not found" });
+      
+      // If user exists, add them directly as a collaborator
+      if (collaborator) {
+        const collaboratorData = insertProjectCollaboratorSchema.parse({
+          projectId,
+          userId: collaborator.id,
+          role: req.body.role || "editor"
+        });
+        
+        const newCollaborator = await storage.addProjectCollaborator(collaboratorData);
+        return res.status(201).json({ 
+          success: true, 
+          collaborator: newCollaborator, 
+          message: "Collaborator added successfully"
+        });
+      } 
+      
+      // User doesn't exist, create an invitation
+      // Check if an invitation already exists for this email
+      const existingInvitation = await storage.getInvitationByEmail(projectId, collaboratorEmail);
+      if (existingInvitation && existingInvitation.status === "pending") {
+        return res.status(200).json({ 
+          success: true, 
+          invitation: existingInvitation,
+          message: "Invitation already sent to this email"
+        });
       }
       
-      const collaboratorData = insertProjectCollaboratorSchema.parse({
+      // Create a new invitation
+      const invitation = await storage.createProjectInvitation({
         projectId,
-        userId: collaborator.id,
-        role: req.body.role || "editor"
+        email: collaboratorEmail,
+        role: req.body.role || "editor",
+        invitedBy: userId
       });
       
-      const newCollaborator = await storage.addProjectCollaborator(collaboratorData);
-      res.status(201).json(newCollaborator);
+      // In a real application, this is where you would send an email with the invitation link
+      // using the SendGrid API
+
+      return res.status(201).json({ 
+        success: true, 
+        invitation,
+        message: "Invitation sent successfully",
+        inviteLink: `${req.protocol}://${req.get('host')}/invite/${invitation.token}`
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid collaborator data", errors: error.errors });
       }
+      console.error(error);
       res.status(500).json({ message: "Failed to add collaborator" });
     }
   });

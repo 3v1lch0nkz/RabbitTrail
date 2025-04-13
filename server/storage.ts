@@ -3,8 +3,10 @@ import {
   Project, InsertProject, 
   Entry, InsertEntry,
   ProjectCollaborator, InsertProjectCollaborator,
-  users, projects, projectCollaborators, entries
+  ProjectInvitation, InsertProjectInvitation,
+  users, projects, projectCollaborators, entries, projectInvitations
 } from "@shared/schema";
+import crypto from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { db, pool } from "./db";
@@ -40,6 +42,13 @@ export interface IStorage {
   getProjectCollaborators(projectId: number): Promise<(ProjectCollaborator & { user: User })[]>;
   addProjectCollaborator(collaborator: InsertProjectCollaborator): Promise<ProjectCollaborator>;
   removeProjectCollaborator(projectId: number, userId: number): Promise<void>;
+  
+  // Invitation methods
+  createProjectInvitation(invitation: Omit<InsertProjectInvitation, "token"> & { invitedBy: number }): Promise<ProjectInvitation>;
+  getProjectInvitations(projectId: number): Promise<ProjectInvitation[]>;
+  getInvitationByToken(token: string): Promise<ProjectInvitation | undefined>;
+  updateInvitationStatus(id: number, status: string): Promise<void>;
+  getInvitationByEmail(projectId: number, email: string): Promise<ProjectInvitation | undefined>;
   
   sessionStore: session.Store;
 }
@@ -281,6 +290,67 @@ export class DatabaseStorage implements IStorage {
       pool,
       createTableIfMissing: true
     });
+  }
+  
+  // Invitation methods
+  async createProjectInvitation(
+    invitation: Omit<InsertProjectInvitation, "token"> & { invitedBy: number }
+  ): Promise<ProjectInvitation> {
+    // Generate a secure random token
+    const token = Buffer.from(crypto.randomUUID().replace(/-/g, '')).toString('hex');
+    
+    // Set default expiration 7 days from now if not provided
+    const expiresAt = invitation.expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    
+    const invitationWithToken = {
+      projectId: invitation.projectId,
+      email: invitation.email,
+      role: invitation.role || 'editor',
+      token,
+      expiresAt
+    };
+    
+    const [createdInvitation] = await db
+      .insert(projectInvitations)
+      .values(invitationWithToken)
+      .returning();
+    
+    return createdInvitation;
+  }
+  
+  async getProjectInvitations(projectId: number): Promise<ProjectInvitation[]> {
+    return db
+      .select()
+      .from(projectInvitations)
+      .where(eq(projectInvitations.projectId, projectId));
+  }
+  
+  async getInvitationByToken(token: string): Promise<ProjectInvitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(projectInvitations)
+      .where(eq(projectInvitations.token, token));
+    
+    return invitation;
+  }
+  
+  async updateInvitationStatus(id: number, status: string): Promise<void> {
+    await db
+      .update(projectInvitations)
+      .set({ status })
+      .where(eq(projectInvitations.id, id));
+  }
+  
+  async getInvitationByEmail(projectId: number, email: string): Promise<ProjectInvitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(projectInvitations)
+      .where(and(
+        eq(projectInvitations.projectId, projectId),
+        eq(projectInvitations.email, email)
+      ));
+    
+    return invitation;
   }
 
   // User methods
