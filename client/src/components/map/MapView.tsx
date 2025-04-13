@@ -84,35 +84,37 @@ export default function MapView({
     // Custom icon function
     function createCustomIcon(entry: Entry) {
       // Determine entry type based on characteristics
-      let entryType = "default";
+      let markerColor = "#6B7280"; // Default gray
       
-      // If entry has an image, consider it evidence
+      // If entry has an image, consider it evidence (green)
       if (entry.mediaUrlImage) {
-        entryType = "evidence";
+        markerColor = "#047857";
       } 
-      // If entry has audio, consider it an interview
+      // If entry has audio, consider it an interview (blue)
       else if (entry.mediaUrlAudio) {
-        entryType = "interview";
+        markerColor = "#4F46E5";
       }
-      // If no media but has a title with "found" or "spotted", consider it a lead
+      // If no media but has a title with "found" or "spotted", consider it a lead (orange)
       else if (entry.title.toLowerCase().includes("found") || 
                entry.title.toLowerCase().includes("spotted")) {
-        entryType = "lead";
+        markerColor = "#C2410C";
       }
       
-      // Create a simpler HTML structure with our new CSS classes
-      const html = `
-        <div class="map-marker ${entryType}">
-          <div class="map-marker-inner"></div>
-        </div>
+      // Create a simple SVG marker
+      const svgIcon = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+          <circle cx="12" cy="12" r="10" fill="${markerColor}" stroke="white" stroke-width="2"/>
+        </svg>
       `;
       
-      return window.L.divIcon({
-        className: "leaflet-div-icon",
-        iconSize: [30, 30],
-        iconAnchor: [15, 30],
-        popupAnchor: [0, -30],
-        html: html
+      // SVG needs to be base64 encoded to work with CSP
+      const encodedSvg = 'data:image/svg+xml;base64,' + btoa(svgIcon);
+      
+      return window.L.icon({
+        iconUrl: encodedSvg,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -12]
       });
     }
     

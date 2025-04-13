@@ -67,7 +67,7 @@ const securityHeadersMiddleware = (req: Request, res: Response, next: Function) 
   // Content Security Policy
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; font-src 'self'; connect-src 'self' https://*.tile.openstreetmap.org https://unpkg.com;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com; font-src 'self'; connect-src 'self' https://*.tile.openstreetmap.org https://unpkg.com; object-src 'self' data:;"
   );
   
   // Prevent clickjacking attacks
