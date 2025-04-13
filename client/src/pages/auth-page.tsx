@@ -213,7 +213,7 @@ const AuthPage = () => {
   // Redirect if already logged in and no invitation is being processed
   useEffect(() => {
     if (user && !(invitationToken && acceptInvitationMutation.isPending)) {
-      navigate("/");
+      navigate("/dashboard");
     }
   }, [user, navigate, invitationToken, acceptInvitationMutation.isPending]);
 

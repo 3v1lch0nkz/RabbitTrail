@@ -45,15 +45,15 @@ const Header = () => {
       <div className="mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
         <div className="flex items-center gap-2">
           <Map className="w-8 h-8 text-primary" />
-          <Link href="/">
+          <Link href="/dashboard">
             <span className="font-semibold text-xl text-primary cursor-pointer">RabbitTrail</span>
           </Link>
         </div>
         
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-6">
-          <Link href="/">
-            <span className={`font-medium ${location === '/' ? 'text-primary' : 'text-gray-600 hover:text-primary'}`}>
+          <Link href="/dashboard">
+            <span className={`font-medium ${location === '/dashboard' ? 'text-primary' : 'text-gray-600 hover:text-primary'}`}>
               Projects
             </span>
           </Link>
@@ -111,7 +111,7 @@ const Header = () => {
       
       {/* Mobile Menu */}
       <div className={`md:hidden bg-white border-t border-gray-200 px-2 pt-2 pb-3 space-y-1 ${mobileMenuOpen ? 'block' : 'hidden'}`}>
-        <Link href="/">
+        <Link href="/dashboard">
           <span className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
             Projects
           </span>
