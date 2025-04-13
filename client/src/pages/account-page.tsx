@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { User } from "@shared/schema";
-import { db } from "@/lib/db";
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
