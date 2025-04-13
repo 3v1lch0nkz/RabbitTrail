@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
-import { storage } from "./storage";
+import { storage as dataStorage } from "./storage";
 import { 
   insertProjectSchema, 
   insertEntrySchema, 
@@ -9,6 +9,11 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import opencage from "opencage-api-client";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import crypto from "crypto";
+import express from "express";
 
 // Auth middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: Function) => {
@@ -18,9 +23,46 @@ const isAuthenticated = (req: Request, res: Response, next: Function) => {
   res.status(401).json({ message: "Unauthorized" });
 };
 
+// Set up multer for file uploads
+const uploadsDir = path.join(process.cwd(), 'uploads');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure storage for uploaded files
+const multerStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    // Create a unique filename with original extension
+    const uniqueSuffix = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname);
+    cb(null, `${uniqueSuffix}${ext}`);
+  }
+});
+
+const upload = multer({ 
+  storage: multerStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: function(req, file, cb) {
+    // Accept images and audio files
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image and audio files are allowed'));
+    }
+  }
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
+  
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // Project routes
   app.get("/api/projects", isAuthenticated, async (req, res) => {
@@ -29,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      const projects = await storage.getProjectsByUser(userId);
+      const projects = await dataStorage.getProjectsByUser(userId);
       res.json(projects);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch projects" });
