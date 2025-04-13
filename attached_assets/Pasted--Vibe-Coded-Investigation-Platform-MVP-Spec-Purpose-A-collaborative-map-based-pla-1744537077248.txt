@@ -1,0 +1,128 @@
+
+# 🧭 Vibe-Coded Investigation Platform – MVP Spec
+
+> **Purpose:** A collaborative, map-based platform for hobbyist case investigators. Mobile and desktop friendly.  
+> **Type:** Minimum Viable Product  
+> **Audience:** Developers, AI agents, product team  
+
+---
+
+## 📌 Project Summary
+
+A tool for hobbyist investigators to log cases geographically, document incidents and evidence with multimedia, and collaborate in a focused, lightweight interface.
+
+---
+
+## ✅ Core Features
+
+### 🔐 1. User Accounts
+- [ ] Sign up, login, logout
+- [ ] Password recovery
+- [ ] User profile: name + email
+
+### 🗂️ 2. Project System
+- [ ] Create, rename, delete investigation projects
+- [ ] List of projects owned by user
+- [ ] Project metadata: title, description, created date
+
+### 🗺️ 3. Map Interface
+- [ ] View interactive map (Mapbox or Leaflet)
+- [ ] Add "entries" with:
+  - [ ] Title
+  - [ ] Markdown description
+  - [ ] Geolocation (manual or GPS)
+  - [ ] Optional URLs
+  - [ ] Optional image/audio upload
+- [ ] Clickable pins on map
+- [ ] Entry list view (sortable, searchable)
+
+### 🖼️ 4. Media Upload
+- [ ] Attach 1 image + 1 audio per entry
+- [ ] Store in cloud (Cloudinary or Firebase)
+- [ ] Display media inline with entry
+
+### 📁 5. Entry Database
+- [ ] Entries organized per project
+- [ ] Edit/delete entries
+- [ ] Basic search + sort
+- [ ] User ID attached to each entry
+
+---
+
+## 👥 Minimal Collaboration
+
+### 🤝 6. Project Sharing
+- [ ] Invite collaborators by email
+- [ ] Generate shared edit link
+
+### 🔐 7. Permissions
+- Owner:
+  - [ ] Full access (delete, manage users)
+- Collaborator:
+  - [ ] Add/edit/delete entries
+  - [ ] Cannot delete project or manage users
+
+### 🧾 8. Collaborator Visibility
+- [ ] Display list of users with access
+
+### 🕵️‍♀️ Optional:
+- [ ] Entry activity logs (who edited what)
+
+---
+
+## 📱 Mobile/Desktop Support
+- [ ] Fully responsive layout (Tailwind CSS)
+- [ ] Mobile map interaction (touch + GPS)
+- [ ] Desktop map + entry list split view
+
+---
+
+## ⚙️ Stack Overview
+
+### 💻 Frontend
+- React + Next.js
+- Tailwind CSS
+- Mapbox GL JS or Leaflet
+- React Dropzone (file uploads)
+
+### 🔧 Backend
+- Node.js + Express
+- PostgreSQL + Prisma
+- Cloudinary / Firebase Storage
+- Supabase Auth or Clerk
+
+### 🚀 Deployment
+- Vercel (frontend)
+- Railway / Supabase (backend + DB)
+- GitHub + CI/CD
+
+---
+
+## 📦 Data Models (Simplified)
+
+### 🧑‍💻 `User`
+- `id`, `email`, `displayName`, `createdAt`
+
+### 🗃️ `Project`
+- `id`, `title`, `ownerId`, `createdAt`
+
+### 🤝 `ProjectCollaborators`
+- `id`, `projectId`, `userId`
+
+### 📍 `Entry`
+- `id`, `projectId`, `createdById`
+- `title`, `description` (Markdown)
+- `latitude`, `longitude`
+- `mediaUrlImage`, `mediaUrlAudio`
+- `createdAt`, `updatedAt`
+
+---
+
+## 📝 Notes for Devs / Agents
+
+- [ ] Keep code modular and clean
+- [ ] Tailwind-based responsive UI
+- [ ] Use RESTful backend architecture
+- [ ] Media files linked directly to entries
+- [ ] Secure project collaboration
+- [ ] All entries must be scoped to their project
