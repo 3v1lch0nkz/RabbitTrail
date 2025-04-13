@@ -102,4 +102,33 @@ export function setupAuth(app: Express) {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     res.json(req.user);
   });
+  
+  // Update user profile
+  app.patch("/api/user/profile", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const { displayName, email } = req.body;
+      
+      if (email && email !== req.user.email) {
+        const existingUserWithEmail = await storage.getUserByEmail(email);
+        if (existingUserWithEmail && existingUserWithEmail.id !== req.user.id) {
+          return res.status(400).json({ message: "Email already in use" });
+        }
+      }
+      
+      const updatedUser = await storage.updateUser(req.user.id, { 
+        displayName, 
+        email 
+      });
+      
+      // Update the session
+      req.login(updatedUser, (err) => {
+        if (err) return next(err);
+        res.json(updatedUser);
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 }

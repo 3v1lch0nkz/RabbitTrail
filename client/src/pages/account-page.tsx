@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { User } from "@shared/schema";
+import { db } from "@/lib/db";
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -118,9 +119,9 @@ const AccountPage = () => {
   };
   
   // Format date to readable string
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | Date) => {
     if (!dateString) return "N/A";
-    const date = new Date(dateString);
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
     return date.toLocaleDateString('en-US', { 
       year: 'numeric', 
       month: 'long', 
