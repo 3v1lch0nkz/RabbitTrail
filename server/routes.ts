@@ -101,6 +101,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   
+  // Serve static files from client/public directory
+  app.use(express.static(path.join(process.cwd(), 'client/public')));
+  
   // Serve robots.txt - restrict search engine crawling of user data
   app.get('/robots.txt', (req, res) => {
     res.type('text/plain');
