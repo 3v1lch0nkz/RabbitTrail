@@ -32,6 +32,19 @@ export default function MapView({
   useEffect(() => {
     if (!window.L || !mapRef.current || mapInstanceRef.current) return;
 
+    // Set custom path for marker icons
+    // This fixes the CSP issues with default Leaflet icons
+    if (window.L.Icon.Default.imagePath) {
+      window.L.Icon.Default.imagePath = '/images/leaflet/';
+    }
+    
+    // For older versions of Leaflet, set the icon URLs directly
+    window.L.Icon.Default.mergeOptions({
+      iconUrl: '/images/leaflet/marker-icon.png',
+      shadowUrl: '/images/leaflet/marker-shadow.png',
+      iconRetinaUrl: '/images/leaflet/marker-icon.png'
+    });
+
     // Default center (San Francisco)
     const defaultCenter = [37.7749, -122.4194];
     
