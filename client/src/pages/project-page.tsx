@@ -5,7 +5,7 @@ import { Project, Entry, User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Users, MoreVertical } from "lucide-react";
+import { Users } from "lucide-react";
 import Header from "@/components/layout/header";
 import MobileNav from "@/components/layout/mobile-nav";
 import ProjectSidebar from "@/components/layout/project-sidebar";
