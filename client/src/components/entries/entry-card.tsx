@@ -90,7 +90,8 @@ const EntryCard = ({ entry, creator, onEdit, onDelete }: EntryCardProps) => {
           </div>
         )}
         
-        <div className="mt-3 flex justify-between items-center">
+        {/* Desktop Controls */}
+        <div className="mt-3 md:flex justify-between items-center hidden">
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">
               {creator ? `Added by ${creator.displayName || creator.username}` : "Added by you"}
@@ -132,6 +133,53 @@ const EntryCard = ({ entry, creator, onEdit, onDelete }: EntryCardProps) => {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete this entry. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => onDelete(entry.id)}
+                    className="bg-red-500 hover:bg-red-600"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+        
+        {/* Mobile Controls */}
+        <div className="mt-3 flex flex-col md:hidden">
+          <div className="flex items-center mb-2">
+            <span className="text-xs text-gray-500">
+              {creator ? `Added by ${creator.displayName || creator.username}` : "Added by you"}
+            </span>
+          </div>
+          
+          <div className="flex justify-center gap-6 mt-2">
+            <button 
+              className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center shadow-sm"
+              onClick={() => onEdit(entry)}
+              aria-label="Edit entry"
+            >
+              <Edit className="w-6 h-6 text-primary" />
+            </button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button 
+                  className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center shadow-sm"
+                  aria-label="Delete entry"
+                >
+                  <Trash2 className="w-6 h-6 text-red-500" />
+                </button>
+              </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you sure?</AlertDialogTitle>
