@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /auth
+Disallow: /projects
+Disallow: /account
+Disallow: /team
+Disallow: /api/
+
+# Allow only the landing page, disallow all other routes

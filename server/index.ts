@@ -6,6 +6,37 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Content Security Policy middleware
+app.use((req, res, next) => {
+  // Define CSP directives
+  const cspDirectives = {
+    'default-src': ["'self'"],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"],
+    'style-src': ["'self'", "'unsafe-inline'", "https://unpkg.com"],
+    'img-src': ["'self'", "data:", "https://*.openstreetmap.org", "https://*.tile.openstreetmap.org", "blob:"],
+    'font-src': ["'self'", "https://unpkg.com"],
+    'connect-src': ["'self'", "https://*.openstreetmap.org", "https://*.tile.openstreetmap.org", "https://opencagedata.com"],
+    'frame-src': ["'self'"],
+    'object-src': ["'none'"],
+    'base-uri': ["'self'"]
+  };
+
+  // Create CSP header string
+  const cspString = Object.entries(cspDirectives)
+    .map(([key, values]) => `${key} ${values.join(' ')}`)
+    .join('; ');
+
+  // Set CSP header
+  res.setHeader('Content-Security-Policy', cspString);
+  
+  // Also add basic security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
