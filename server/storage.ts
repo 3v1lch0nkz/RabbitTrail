@@ -348,7 +348,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProject(insertProject: InsertProject): Promise<Project> {
-    const [project] = await db.insert(projects).values(insertProject).returning();
+    const projectWithDefaults = {
+      title: insertProject.title,
+      ownerId: insertProject.ownerId,
+      description: insertProject.description ?? null
+    };
+    
+    const [project] = await db.insert(projects).values(projectWithDefaults).returning();
     return project;
   }
 
@@ -426,9 +432,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEntry(insertEntry: InsertEntry): Promise<Entry> {
+    // Normalize NULL values for optional fields
+    const entryWithDefaults = {
+      title: insertEntry.title,
+      projectId: insertEntry.projectId,
+      createdById: insertEntry.createdById,
+      description: insertEntry.description ?? null,
+      latitude: insertEntry.latitude ?? null,
+      longitude: insertEntry.longitude ?? null,
+      mediaUrlImage: insertEntry.mediaUrlImage ?? null,
+      mediaUrlAudio: insertEntry.mediaUrlAudio ?? null,
+      links: insertEntry.links ?? null
+    };
+    
     const [entry] = await db
       .insert(entries)
-      .values(insertEntry)
+      .values(entryWithDefaults)
       .returning();
     
     return entry;
@@ -490,9 +509,16 @@ export class DatabaseStorage implements IStorage {
       throw new Error("User is already a collaborator");
     }
     
+    // Normalize with default role if not provided
+    const collaboratorWithDefaults = {
+      projectId: insertCollaborator.projectId,
+      userId: insertCollaborator.userId,
+      role: insertCollaborator.role ?? 'editor'
+    };
+    
     const [collaborator] = await db
       .insert(projectCollaborators)
-      .values(insertCollaborator)
+      .values(collaboratorWithDefaults)
       .returning();
     
     return collaborator;
