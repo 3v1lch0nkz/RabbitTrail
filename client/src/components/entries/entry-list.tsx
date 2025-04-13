@@ -181,12 +181,12 @@ const EntryList = ({
       </div>
       
       {/* Add Entry Button (Mobile) */}
-      <div className="md:hidden fixed bottom-4 right-4 z-10">
+      <div className="md:hidden fixed bottom-20 right-4 z-50">
         <Button 
-          className="rounded-full w-14 h-14 shadow-lg p-0"
+          className="rounded-full w-16 h-16 shadow-lg p-0 bg-primary hover:bg-primary/90"
           onClick={onAddEntry}
         >
-          <Plus className="h-6 w-6" />
+          <Plus className="h-8 w-8" />
         </Button>
       </div>
     </div>
