@@ -1,272 +1,383 @@
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useAuth } from '@/hooks/use-auth';
-import { useLocation } from 'wouter';
-import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { MapPin } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { insertUserSchema, User } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { Map, LogIn, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
-const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
+// Login schema
+const loginSchema = insertUserSchema.pick({
+  username: true,
+  password: true,
 });
 
-const registerSchema = z.object({
-  username: z.string().min(3, 'Username must be at least 3 characters'),
-  email: z.string().email('Please enter a valid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+// Registration schema
+const registerSchema = insertUserSchema.extend({
+  password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string(),
-  displayName: z.string().min(2, 'Display name must be at least 2 characters'),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
 
-type LoginFormData = z.infer<typeof loginSchema>;
-type RegisterFormData = z.infer<typeof registerSchema>;
+type LoginFormValues = z.infer<typeof loginSchema>;
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
-export default function AuthPage() {
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
-  const { user, loginMutation, registerMutation } = useAuth();
-  const [_, setLocation] = useLocation();
+const AuthPage = () => {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  const [_, navigate] = useLocation();
+  
+  // Get user data
+  const { 
+    data: user,
+    isLoading 
+  } = useQuery<User | null>({
+    queryKey: ["/api/user"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+
+  // Login mutation
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: LoginFormValues) => {
+      const res = await apiRequest("POST", "/api/login", credentials);
+      return await res.json();
+    },
+    onSuccess: (user: User) => {
+      queryClient.setQueryData(["/api/user"], user);
+      toast({
+        title: "Login successful",
+        description: `Welcome back, ${user.displayName || user.username}!`,
+      });
+      navigate("/");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Login failed",
+        description: error.message || "Invalid username or password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Register mutation
+  const registerMutation = useMutation({
+    mutationFn: async (credentials: InsertUser) => {
+      const res = await apiRequest("POST", "/api/register", credentials);
+      return await res.json();
+    },
+    onSuccess: (user: User) => {
+      queryClient.setQueryData(["/api/user"], user);
+      toast({
+        title: "Registration successful",
+        description: `Welcome to RabbitTrail, ${user.displayName || user.username}!`,
+      });
+      navigate("/");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Registration failed",
+        description: error.message || "Could not create account",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      setLocation('/');
+      navigate("/");
     }
-  }, [user, setLocation]);
+  }, [user, navigate]);
 
   // Login form
-  const loginForm = useForm<LoginFormData>({
+  const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: '',
-      password: '',
-    }
+      username: "",
+      password: "",
+    },
   });
 
   // Register form
-  const registerForm = useForm<RegisterFormData>({
+  const registerForm = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      username: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-      displayName: '',
-    }
+      username: "",
+      email: "",
+      displayName: "",
+      password: "",
+      confirmPassword: "",
+    },
   });
 
-  const onLoginSubmit = (data: LoginFormData) => {
+  const onLogin = (data: LoginFormValues) => {
     loginMutation.mutate(data);
   };
 
-  const onRegisterSubmit = (data: RegisterFormData) => {
-    registerMutation.mutate(data);
+  const onRegister = (data: RegisterFormValues) => {
+    // Remove confirmPassword as it's not part of the API
+    const { confirmPassword, ...registrationData } = data;
+    registerMutation.mutate(registrationData);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
-      {/* Auth Form Section */}
-      <div className="md:w-1/2 flex items-center justify-center px-4 py-12 md:py-0">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center">
-              <MapPin className="h-8 w-8 text-primary mr-2" />
-              <h1 className="text-3xl font-bold text-primary">RabbitTrail</h1>
+    <div className="min-h-screen flex flex-col md:flex-row">
+      {/* Left side - Auth forms */}
+      <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 bg-white">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Map className="h-8 w-8 text-primary" />
+              <span className="font-semibold text-xl text-primary">RabbitTrail</span>
             </div>
-            <p className="mt-2 text-gray-600">Your collaborative investigation platform</p>
-          </div>
-
-          {/* Auth Tabs */}
-          <div className="flex mb-6 border-b border-gray-200">
-            <button 
-              onClick={() => setActiveTab('login')}
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === 'login' 
-                  ? 'text-primary border-b-2 border-primary' 
-                  : 'text-gray-500'
-              }`}
+            <CardTitle className="text-2xl font-bold">Welcome to RabbitTrail</CardTitle>
+            <CardDescription>
+              Enter your credentials to access your account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs 
+              defaultValue="login" 
+              value={activeTab}
+              onValueChange={(value) => setActiveTab(value as "login" | "register")}
+              className="w-full"
             >
-              Log In
-            </button>
-            <button 
-              onClick={() => setActiveTab('signup')}
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === 'signup' 
-                  ? 'text-primary border-b-2 border-primary' 
-                  : 'text-gray-500'
-              }`}
-            >
-              Sign Up
-            </button>
-          </div>
-
-          {/* Login Form */}
-          {activeTab === 'login' && (
-            <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className={activeTab === 'login' ? 'block' : 'hidden'}>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    placeholder="Your username"
-                    {...loginForm.register('username')}
-                  />
-                  {loginForm.formState.errors.username && (
-                    <p className="text-sm text-red-500 mt-1">{loginForm.formState.errors.username.message}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    {...loginForm.register('password')}
-                  />
-                  {loginForm.formState.errors.password && (
-                    <p className="text-sm text-red-500 mt-1">{loginForm.formState.errors.password.message}</p>
-                  )}
-                  <a href="#" className="text-sm text-primary hover:underline mt-1 inline-block">Forgot password?</a>
-                </div>
-                
-                <Button 
-                  type="submit" 
-                  className="w-full"
-                  disabled={loginMutation.isPending}
-                >
-                  {loginMutation.isPending ? 'Logging in...' : 'Log In'}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          {/* Signup Form */}
-          {activeTab === 'signup' && (
-            <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className={activeTab === 'signup' ? 'block' : 'hidden'}>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="displayName">Display Name</Label>
-                  <Input
-                    id="displayName"
-                    placeholder="Your Name"
-                    {...registerForm.register('displayName')}
-                  />
-                  {registerForm.formState.errors.displayName && (
-                    <p className="text-sm text-red-500 mt-1">{registerForm.formState.errors.displayName.message}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    {...registerForm.register('email')}
-                  />
-                  {registerForm.formState.errors.email && (
-                    <p className="text-sm text-red-500 mt-1">{registerForm.formState.errors.email.message}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <Label htmlFor="username-register">Username</Label>
-                  <Input
-                    id="username-register"
-                    placeholder="Your username"
-                    {...registerForm.register('username')}
-                  />
-                  {registerForm.formState.errors.username && (
-                    <p className="text-sm text-red-500 mt-1">{registerForm.formState.errors.username.message}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <Label htmlFor="password-register">Password</Label>
-                  <Input
-                    id="password-register"
-                    type="password"
-                    placeholder="••••••••"
-                    {...registerForm.register('password')}
-                  />
-                  {registerForm.formState.errors.password && (
-                    <p className="text-sm text-red-500 mt-1">{registerForm.formState.errors.password.message}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    placeholder="••••••••"
-                    {...registerForm.register('confirmPassword')}
-                  />
-                  {registerForm.formState.errors.confirmPassword && (
-                    <p className="text-sm text-red-500 mt-1">{registerForm.formState.errors.confirmPassword.message}</p>
-                  )}
-                </div>
-                
-                <Button 
-                  type="submit" 
-                  className="w-full"
-                  disabled={registerMutation.isPending}
-                >
-                  {registerMutation.isPending ? 'Creating Account...' : 'Create Account'}
-                </Button>
-              </div>
-            </form>
-          )}
-        </div>
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="login">
+                <Form {...loginForm}>
+                  <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                    <FormField
+                      control={loginForm.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username</FormLabel>
+                          <FormControl>
+                            <Input placeholder="your_username" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={loginForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" placeholder="••••••••" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={loginMutation.isPending}
+                    >
+                      {loginMutation.isPending ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></span>
+                          Logging in...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <LogIn className="h-4 w-4" />
+                          Login
+                        </span>
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+              </TabsContent>
+              
+              <TabsContent value="register">
+                <Form {...registerForm}>
+                  <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
+                    <FormField
+                      control={registerForm.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username</FormLabel>
+                          <FormControl>
+                            <Input placeholder="your_username" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="your.email@example.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="displayName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Display Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="John Doe" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" placeholder="••••••••" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirm Password</FormLabel>
+                          <FormControl>
+                            <Input type="password" placeholder="••••••••" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={registerMutation.isPending}
+                    >
+                      {registerMutation.isPending ? (
+                        <span className="flex items-center gap-2">
+                          <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></span>
+                          Creating account...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <UserPlus className="h-4 w-4" />
+                          Create Account
+                        </span>
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter>
+            <div className="text-sm text-center w-full text-gray-500">
+              {activeTab === "login" ? (
+                <p>
+                  Don't have an account?{" "}
+                  <button 
+                    className="text-primary hover:underline"
+                    onClick={() => setActiveTab("register")}
+                  >
+                    Register
+                  </button>
+                </p>
+              ) : (
+                <p>
+                  Already have an account?{" "}
+                  <button 
+                    className="text-primary hover:underline"
+                    onClick={() => setActiveTab("login")}
+                  >
+                    Login
+                  </button>
+                </p>
+              )}
+            </div>
+          </CardFooter>
+        </Card>
       </div>
       
-      {/* Hero Section */}
-      <div className="hidden md:block md:w-1/2 bg-primary p-12 text-white">
-        <div className="h-full flex flex-col justify-center max-w-lg mx-auto">
-          <h2 className="text-4xl font-bold mb-6">Map Your Investigation</h2>
-          <p className="text-lg mb-8">
-            RabbitTrail is a collaborative platform for hobbyist investigators to document cases geographically, log evidence, and share findings.
+      {/* Right side - Hero section */}
+      <div 
+        className="hidden md:flex md:w-1/2 bg-primary flex-col justify-center items-center p-8 text-white"
+      >
+        <div className="max-w-md text-center">
+          <h1 className="text-3xl font-bold mb-4">Your Investigation Platform</h1>
+          <p className="text-lg mb-6">
+            Document, organize, and collaborate on your investigations with our map-based platform.
           </p>
-          
-          <div className="space-y-4 mb-8">
-            <div className="flex items-start">
-              <div className="mr-4 bg-white bg-opacity-20 p-2 rounded-full">
-                <MapPin className="h-6 w-6" />
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-full">
+                <Map className="h-6 w-6" />
               </div>
-              <div>
-                <h3 className="font-semibold text-xl">Geographic Documentation</h3>
-                <p>Plot important locations, organize evidence, and visualize spatial connections.</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start">
-              <div className="mr-4 bg-white bg-opacity-20 p-2 rounded-full">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-xl">Team Collaboration</h3>
-                <p>Work together with other investigators, assign permissions, and share discoveries.</p>
+              <div className="text-left">
+                <h3 className="font-medium">Map-Based Documentation</h3>
+                <p className="text-sm opacity-80">Plot evidence and sightings geographically</p>
               </div>
             </div>
-            
-            <div className="flex items-start">
-              <div className="mr-4 bg-white bg-opacity-20 p-2 rounded-full">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
                 </svg>
               </div>
-              <div>
-                <h3 className="font-semibold text-xl">Rich Documentation</h3>
-                <p>Document with text, images, audio recordings, and more in one organized place.</p>
+              <div className="text-left">
+                <h3 className="font-medium">Media Organization</h3>
+                <p className="text-sm opacity-80">Add images and audio recordings to entries</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <h3 className="font-medium">Team Collaboration</h3>
+                <p className="text-sm opacity-80">Invite others to contribute to your projects</p>
               </div>
             </div>
           </div>
@@ -274,4 +385,6 @@ export default function AuthPage() {
       </div>
     </div>
   );
-}
+};
+
+export default AuthPage;

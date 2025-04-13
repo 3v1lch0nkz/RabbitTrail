@@ -1,186 +1,232 @@
 import { useState } from "react";
-import Header from "@/components/layout/Header";
-import Sidebar from "@/components/layout/Sidebar";
-import MapView from "@/components/map/MapView";
-import EntriesPanel from "@/components/entries/EntriesPanel";
-import NewEntryModal from "@/components/entries/NewEntryModal";
-import EntryDetailModal from "@/components/entries/EntryDetailModal";
-import ProjectSettingsModal from "@/components/projects/ProjectSettingsModal";
-import CreateProjectModal from "@/components/projects/CreateProjectModal";
-import { useQuery } from "@tanstack/react-query";
-import { Project, Entry } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { Project, insertProjectSchema } from "@shared/schema";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { PlusCircle, Loader2 } from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import Header from "@/components/layout/header";
+import ProjectSidebar from "@/components/layout/project-sidebar";
+import MobileNav from "@/components/layout/mobile-nav";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
-export default function HomePage() {
+// Create project schema with validation
+const createProjectSchema = insertProjectSchema
+  .pick({ title: true, description: true })
+  .extend({
+    title: z.string().min(1, "Title is required"),
+  });
+
+type CreateProjectFormValues = z.infer<typeof createProjectSchema>;
+
+const HomePage = () => {
+  const [_, navigate] = useLocation();
   const { toast } = useToast();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isNewEntryModalOpen, setIsNewEntryModalOpen] = useState(false);
-  const [isEntryDetailModalOpen, setIsEntryDetailModalOpen] = useState(false);
-  const [isProjectSettingsModalOpen, setIsProjectSettingsModalOpen] = useState(false);
-  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
-  
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
+  const { user } = useAuth();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   
   // Fetch projects
-  const { data: projectsData, isLoading: isLoadingProjects } = useQuery({
+  const { 
+    data: projects = [], 
+    isLoading: isLoadingProjects,
+  } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
+  });
+  
+  // Create project form
+  const form = useForm<CreateProjectFormValues>({
+    resolver: zodResolver(createProjectSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+    },
+  });
+  
+  // Create project mutation
+  const createProjectMutation = useMutation({
+    mutationFn: async (data: CreateProjectFormValues) => {
+      const res = await apiRequest("POST", "/api/projects", data);
+      return await res.json() as Project;
+    },
+    onSuccess: (newProject: Project) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setIsCreateDialogOpen(false);
+      form.reset();
+      toast({
+        title: "Project created",
+        description: `"${newProject.title}" has been created successfully`,
+      });
+      navigate(`/projects/${newProject.id}`);
+    },
     onError: (error: Error) => {
       toast({
-        title: "Failed to load projects",
+        title: "Failed to create project",
         description: error.message,
         variant: "destructive",
       });
     },
   });
   
-  // Fetch entries for selected project
-  const { data: entries, isLoading: isLoadingEntries } = useQuery({
-    queryKey: ["/api/projects", selectedProject?.id, "entries"],
-    queryFn: selectedProject ? undefined : () => [],
-    enabled: !!selectedProject,
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to load entries",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-  
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
+  const onSubmit = (data: CreateProjectFormValues) => {
+    createProjectMutation.mutate(data);
   };
   
-  const openNewEntryModal = () => {
-    setIsNewEntryModalOpen(true);
+  const openCreateDialog = () => {
+    setIsCreateDialogOpen(true);
   };
   
-  const closeNewEntryModal = () => {
-    setIsNewEntryModalOpen(false);
-  };
-  
-  const openEntryDetailModal = (entry: Entry) => {
-    setSelectedEntry(entry);
-    setIsEntryDetailModalOpen(true);
-  };
-  
-  const closeEntryDetailModal = () => {
-    setIsEntryDetailModalOpen(false);
-  };
-  
-  const openProjectSettingsModal = () => {
-    setIsProjectSettingsModalOpen(true);
-  };
-  
-  const closeProjectSettingsModal = () => {
-    setIsProjectSettingsModalOpen(false);
-  };
-  
-  const openCreateProjectModal = () => {
-    setIsCreateProjectModalOpen(true);
-  };
-  
-  const closeCreateProjectModal = () => {
-    setIsCreateProjectModalOpen(false);
-  };
-  
-  const selectProject = (project: Project) => {
-    setSelectedProject(project);
-  };
-
   return (
-    <div className="font-sans antialiased text-gray-800 bg-gray-50 h-screen flex flex-col overflow-hidden">
-      <Header 
-        toggleSidebar={toggleSidebar}
-        selectedProject={selectedProject}
-        projects={projectsData?.owned || []}
-        selectProject={selectProject}
-      />
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Header />
       
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)}
-          ownedProjects={projectsData?.owned || []}
-          sharedProjects={projectsData?.shared || []}
-          selectedProject={selectedProject}
-          selectProject={selectProject}
-          openCreateProjectModal={openCreateProjectModal}
-          openProjectSettingsModal={openProjectSettingsModal}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <ProjectSidebar 
+          projects={projects} 
           isLoading={isLoadingProjects}
+          onAddProject={openCreateDialog}
         />
         
-        <main className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-          <MapView 
-            entries={entries || []} 
-            openNewEntryModal={openNewEntryModal}
-            openEntryDetailModal={openEntryDetailModal}
-            selectedProject={selectedProject}
-            isLoading={isLoadingEntries}
-          />
-          
-          <EntriesPanel 
-            entries={entries || []} 
-            openNewEntryModal={openNewEntryModal}
-            openEntryDetailModal={openEntryDetailModal}
-            isLoading={isLoadingEntries}
-          />
-          
-          {/* Mobile Bottom Navigation */}
-          <div className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 flex z-30">
-            <button className="flex-1 py-3 text-center text-sm font-medium text-primary border-t-2 border-primary">
-              <i className="fas fa-map-marker-alt block mx-auto mb-1"></i>
-              Map
-            </button>
-            <button className="flex-1 py-3 text-center text-sm font-medium text-gray-500 hover:text-gray-700">
-              <i className="fas fa-list block mx-auto mb-1"></i>
-              Entries
-            </button>
-            <button 
-              className="flex-1 py-3 text-center text-sm font-medium text-gray-500 hover:text-gray-700"
-              onClick={() => setIsSidebarOpen(true)}
-            >
-              <i className="fas fa-folder block mx-auto mb-1"></i>
-              Projects
-            </button>
-            <button 
-              className="flex-1 py-3 text-center text-sm font-medium text-gray-500 hover:text-gray-700"
-              onClick={openProjectSettingsModal}
-            >
-              <i className="fas fa-cog block mx-auto mb-1"></i>
-              Settings
-            </button>
+        {/* Welcome/Dashboard content */}
+        <main className="flex-1 p-6 flex flex-col items-center justify-center">
+          <div className="max-w-xl w-full text-center space-y-6">
+            <h1 className="text-3xl font-bold text-gray-900">Welcome to RabbitTrail</h1>
+            <p className="text-lg text-gray-600">
+              Your collaborative, map-based platform for hobbyist investigators
+            </p>
+            
+            {isLoadingProjects ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                <div className="mx-auto w-16 h-16 bg-primary/10 flex items-center justify-center rounded-full mb-4">
+                  <PlusCircle className="h-8 w-8 text-primary" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Create your first project</h2>
+                <p className="text-gray-600 mb-6">
+                  Start documenting your investigations by creating a new project
+                </p>
+                <Button onClick={openCreateDialog}>
+                  Create a Project
+                </Button>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Your projects</h2>
+                <p className="text-gray-600 mb-6">
+                  You have {projects.length} project{projects.length !== 1 ? 's' : ''}. 
+                  Select a project from the sidebar or create a new one.
+                </p>
+                <Button onClick={openCreateDialog}>
+                  Create a New Project
+                </Button>
+              </div>
+            )}
           </div>
         </main>
       </div>
       
-      {isNewEntryModalOpen && (
-        <NewEntryModal 
-          onClose={closeNewEntryModal} 
-          projectId={selectedProject?.id || 0} 
-        />
-      )}
+      <MobileNav />
       
-      {isEntryDetailModalOpen && selectedEntry && (
-        <EntryDetailModal 
-          entry={selectedEntry} 
-          onClose={closeEntryDetailModal} 
-        />
-      )}
-      
-      {isProjectSettingsModalOpen && selectedProject && (
-        <ProjectSettingsModal 
-          project={selectedProject} 
-          onClose={closeProjectSettingsModal} 
-        />
-      )}
-      
-      {isCreateProjectModalOpen && (
-        <CreateProjectModal 
-          onClose={closeCreateProjectModal} 
-        />
-      )}
+      {/* Create Project Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create a New Project</DialogTitle>
+            <DialogDescription>
+              Add a title and description for your investigation project
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Cold Case Investigation" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Describe what this project is about..."
+                        className="min-h-[100px]"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      A brief description to help identify your project
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsCreateDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createProjectMutation.isPending}
+                >
+                  {createProjectMutation.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></span>
+                      Creating...
+                    </span>
+                  ) : (
+                    "Create Project"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+};
+
+export default HomePage;
