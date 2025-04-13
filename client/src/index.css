@@ -16,28 +16,30 @@
 }
 
 /* Custom map marker styles */
-.custom-pin {
-  background-color: #6B7280;
-  width: 2rem;
-  height: 2rem;
+.map-marker {
   display: block;
-  position: relative;
-  border-radius: 2rem 2rem 0;
-  transform: rotate(45deg);
-  border: 1px solid #FFFFFF;
-  left: -1rem;
-  top: -1rem;
 }
 
-.marker-evidence {
+.map-marker-inner {
+  width: 24px;
+  height: 24px;
+  background-color: #6B7280;
+  border-radius: 50% 50% 0;
+  transform: rotate(45deg);
+  border: 1px solid #FFFFFF;
+  box-shadow: 0 0 2px rgba(0,0,0,0.3);
+  margin: 0 auto;
+}
+
+.map-marker.evidence .map-marker-inner {
   background-color: #047857;
 }
 
-.marker-lead {
+.map-marker.lead .map-marker-inner {
   background-color: #C2410C;
 }
 
-.marker-interview {
+.map-marker.interview .map-marker-inner {
   background-color: #4F46E5;
 }
 

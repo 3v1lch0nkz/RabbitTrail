@@ -82,17 +82,37 @@ export default function MapView({
     const bounds = window.L.latLngBounds();
     
     // Custom icon function
-    function createCustomIcon(entryType: string) {
-      // Use CSS classes instead of inline styles
-      const markerClassName = entryType === 'evidence' ? 'marker-evidence' : 
-                             entryType === 'lead' ? 'marker-lead' : 
-                             entryType === 'interview' ? 'marker-interview' : '';
+    function createCustomIcon(entry: Entry) {
+      // Determine entry type based on characteristics
+      let entryType = "default";
+      
+      // If entry has an image, consider it evidence
+      if (entry.mediaUrlImage) {
+        entryType = "evidence";
+      } 
+      // If entry has audio, consider it an interview
+      else if (entry.mediaUrlAudio) {
+        entryType = "interview";
+      }
+      // If no media but has a title with "found" or "spotted", consider it a lead
+      else if (entry.title.toLowerCase().includes("found") || 
+               entry.title.toLowerCase().includes("spotted")) {
+        entryType = "lead";
+      }
+      
+      // Create a simpler HTML structure with our new CSS classes
+      const html = `
+        <div class="map-marker ${entryType}">
+          <div class="map-marker-inner"></div>
+        </div>
+      `;
       
       return window.L.divIcon({
-        className: "",
-        iconAnchor: [0, 24],
-        popupAnchor: [0, -36],
-        html: `<span class="custom-pin ${markerClassName}"></span>`
+        className: "leaflet-div-icon",
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+        popupAnchor: [0, -30],
+        html: html
       });
     }
     
@@ -106,7 +126,7 @@ export default function MapView({
       if (isNaN(lat) || isNaN(lng)) return;
       
       const marker = window.L.marker([lat, lng], { 
-        icon: createCustomIcon(entry.entryType) 
+        icon: createCustomIcon(entry) 
       }).addTo(mapInstanceRef.current);
       
       // Add popup with entry title
