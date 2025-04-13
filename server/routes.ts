@@ -64,14 +64,9 @@ const upload = multer({
 
 // Security headers middleware
 const securityHeadersMiddleware = (req: Request, res: Response, next: Function) => {
-  // Temporarily disable CSP for development purposes to allow all resources
-  // Comment this out or replace with stricter policy for production
-  /*
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://replit.com; script-src-elem 'self' 'unsafe-inline' https://unpkg.com https://replit.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.openstreetmap.org https://unpkg.com https://*.unpkg.com; font-src 'self'; connect-src 'self' https://*.tile.openstreetmap.org https://unpkg.com; object-src 'self' data:;"
-  );
-  */
+  // CSP completely disabled for development to fix map marker issues
+  // IMPORTANT: Re-enable with appropriate policy for production
+  // res.setHeader('Content-Security-Policy', "...");
   
   // Prevent clickjacking attacks
   res.setHeader('X-Frame-Options', 'DENY');
