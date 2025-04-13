@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, TouchEvent } from "react";
 import { Entry, Project, User } from "@shared/schema";
-import { Search, ArrowUpDown, Plus, MoreVertical } from "lucide-react";
+import { Search, ArrowUpDown, Plus, MoreVertical, ChevronLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ interface EntryListProps {
   onAddEntry: () => void;
   onEditEntry: (entry: Entry) => void;
   onDeleteEntry: (entryId: number) => void;
+  onProjectActions?: () => void;
 }
 
 type SortOption = "newest" | "oldest" | "alphabetical";
@@ -31,11 +32,56 @@ const EntryList = ({
   users,
   onAddEntry, 
   onEditEntry, 
-  onDeleteEntry 
+  onDeleteEntry,
+  onProjectActions
 }: EntryListProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewType, setViewType] = useState<"list" | "timeline">("list");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
+  const [fabPosition, setFabPosition] = useState<'visible' | 'hidden' | 'dragging'>('visible');
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [currentDragX, setCurrentDragX] = useState<number | null>(null);
+  
+  const entriesListRef = useRef<HTMLDivElement>(null);
+  const fabRef = useRef<HTMLDivElement>(null);
+  
+  // Touch handlers for the FAB
+  const handleTouchStart = (e: TouchEvent<HTMLDivElement>) => {
+    setDragStartX(e.touches[0].clientX);
+    setFabPosition('dragging');
+  };
+  
+  const handleTouchMove = (e: TouchEvent<HTMLDivElement>) => {
+    if (dragStartX === null) return;
+    
+    const currentX = e.touches[0].clientX;
+    setCurrentDragX(currentX);
+    
+    // If dragged far enough to the right, snap to visible state
+    if (currentX - dragStartX > 50) {
+      setFabPosition('visible');
+    } 
+    // If dragged far enough to the left, snap to hidden state
+    else if (dragStartX - currentX > 50) {
+      setFabPosition('hidden');
+    }
+  };
+  
+  const handleTouchEnd = () => {
+    setDragStartX(null);
+    setCurrentDragX(null);
+    
+    // Snap to either fully visible or fully hidden state
+    if (fabPosition === 'dragging') {
+      // If we didn't drag far enough in either direction, snap back to previous state
+      setFabPosition('visible');
+    }
+  };
+  
+  // Toggle FAB visibility
+  const toggleFabVisibility = () => {
+    setFabPosition(prev => prev === 'visible' ? 'hidden' : 'visible');
+  };
   
   // Find creator for each entry
   const getCreator = (createdById: number): User | undefined => {
@@ -82,8 +128,9 @@ const EntryList = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Project Settings</DropdownMenuItem>
-                <DropdownMenuItem>Export Data</DropdownMenuItem>
+                <DropdownMenuItem onClick={onProjectActions}>
+                  Project Actions
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -131,7 +178,10 @@ const EntryList = ({
       </div>
       
       {/* Entries List */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-4">
+      <div 
+        ref={entriesListRef} 
+        className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-4"
+      >
         {isLoading ? (
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
@@ -177,13 +227,37 @@ const EntryList = ({
         )}
       </div>
       
-      {/* Add Entry Button (Mobile) */}
-      <div className="md:hidden fixed bottom-4 right-4 z-10">
+      {/* Swipeable Floating Action Button (Mobile) */}
+      {/* The FAB container */}
+      <div 
+        ref={fabRef}
+        className={`md:hidden fixed bottom-20 z-50 flex items-center transition-all duration-300 touch-manipulation ${
+          fabPosition === 'visible' 
+            ? 'right-4 transform translate-x-0' 
+            : fabPosition === 'hidden' 
+              ? 'right-[-56px] transform translate-x-0' 
+              : `right-4 transform ${currentDragX && dragStartX ? `translateX(${currentDragX - dragStartX}px)` : 'translate-x-0'}`
+        }`}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* FAB Handle */}
+        <div 
+          className="bg-primary/20 rounded-l-full h-12 w-6 flex items-center justify-center cursor-pointer touch-manipulation"
+          onClick={toggleFabVisibility}
+        >
+          <ChevronLeft 
+            className={`h-4 w-4 text-white transition-transform ${fabPosition === 'hidden' ? 'rotate-180' : ''}`} 
+          />
+        </div>
+        
+        {/* Main FAB Button */}
         <Button 
-          className="rounded-full w-14 h-14 shadow-lg p-0"
+          className="rounded-r-full rounded-l-none w-16 h-16 shadow-lg p-0 bg-primary hover:bg-primary/90"
           onClick={onAddEntry}
         >
-          <Plus className="h-6 w-6" />
+          <Plus className="h-8 w-8" />
         </Button>
       </div>
     </div>

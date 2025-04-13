@@ -6,7 +6,7 @@ import { z } from "zod";
 import { insertUserSchema, User, InsertUser } from "@shared/schema";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import { Map, LogIn, UserPlus } from "lucide-react";
+import { Map, LogIn, UserPlus, Mail, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +27,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Login schema
 const loginSchema = insertUserSchema.pick({
@@ -46,10 +47,39 @@ const registerSchema = insertUserSchema.extend({
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
+interface InvitationInfo {
+  invitation: {
+    id: number;
+    projectId: number;
+    email: string;
+    token: string;
+    role: string;
+    status: string;
+    expiresAt: string;
+  };
+  project: {
+    id: number;
+    title: string;
+    description: string | null;
+  };
+}
+
 const AuthPage = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [_, navigate] = useLocation();
+  const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [invitationInfo, setInvitationInfo] = useState<InvitationInfo | null>(null);
+  
+  // Get query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("invitation");
+    if (token) {
+      setInvitationToken(token);
+      setActiveTab("register");  // Switch to register tab if we have an invitation
+    }
+  }, []);
   
   // Get user data
   const { 
@@ -58,6 +88,17 @@ const AuthPage = () => {
   } = useQuery<User | null>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+  
+  // Fetch invitation details if we have a token
+  const {
+    data: invitationData,
+    isLoading: invitationLoading,
+    error: invitationError
+  } = useQuery<InvitationInfo>({
+    queryKey: ["/api/invitations", invitationToken],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!invitationToken,  // Only run if we have a token
   });
 
   // Login mutation
@@ -72,7 +113,7 @@ const AuthPage = () => {
         title: "Login successful",
         description: `Welcome back, ${user.displayName || user.username}!`,
       });
-      navigate("/");
+      navigate("/dashboard");
     },
     onError: (error: Error) => {
       toast({
@@ -95,7 +136,7 @@ const AuthPage = () => {
         title: "Registration successful",
         description: `Welcome to RabbitTrail, ${user.displayName || user.username}!`,
       });
-      navigate("/");
+      navigate("/dashboard");
     },
     onError: (error: Error) => {
       toast({
@@ -105,13 +146,6 @@ const AuthPage = () => {
       });
     },
   });
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      navigate("/");
-    }
-  }, [user, navigate]);
 
   // Login form
   const loginForm = useForm<LoginFormValues>({
@@ -133,6 +167,55 @@ const AuthPage = () => {
       confirmPassword: "",
     },
   });
+  
+  // Accept invitation mutation
+  const acceptInvitationMutation = useMutation({
+    mutationFn: async (token: string) => {
+      const res = await apiRequest("POST", `/api/invitations/${token}/accept`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "You have joined the project!",
+      });
+      navigate("/dashboard");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to join project",
+        description: error.message || "Could not accept the invitation",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Set invitation info when we get data
+  useEffect(() => {
+    if (invitationData) {
+      setInvitationInfo(invitationData);
+      
+      // Pre-fill email field for registration if we have an invitation
+      if (invitationData.invitation.email) {
+        registerForm.setValue("email", invitationData.invitation.email);
+      }
+    }
+  }, [invitationData, registerForm]);
+
+  // Handle registration success with invitation token
+  useEffect(() => {
+    if (user && invitationToken) {
+      // User registered successfully with an invitation, now accept it
+      acceptInvitationMutation.mutate(invitationToken);
+    }
+  }, [user, invitationToken, acceptInvitationMutation]);
+  
+  // Redirect if already logged in and no invitation is being processed
+  useEffect(() => {
+    if (user && !(invitationToken && acceptInvitationMutation.isPending)) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate, invitationToken, acceptInvitationMutation.isPending]);
 
   const onLogin = (data: LoginFormValues) => {
     loginMutation.mutate(data);
@@ -160,6 +243,49 @@ const AuthPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Show invitation info if we have it */}
+            {invitationInfo && (
+              <Alert className="mb-4 bg-primary/10 border-primary/20">
+                <Users className="h-4 w-4 text-primary" />
+                <AlertTitle className="flex items-center gap-2 font-medium text-primary">
+                  <span>Project Invitation</span>
+                </AlertTitle>
+                <AlertDescription className="mt-2">
+                  <p className="text-sm">
+                    You've been invited to join <span className="font-medium">{invitationInfo.project.title}</span> as a{" "}
+                    <span className="font-medium">{invitationInfo.invitation.role}</span>.
+                  </p>
+                  {!user && (
+                    <p className="text-xs mt-1 text-muted-foreground">
+                      Create an account with <span className="font-medium">{invitationInfo.invitation.email}</span> or log in to accept the invitation.
+                    </p>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Show loading state for invitation */}
+            {invitationToken && invitationLoading && (
+              <Alert className="mb-4 bg-blue-50 border-blue-200">
+                <div className="flex items-center gap-2">
+                  <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"></span>
+                  <p className="text-sm font-medium">Loading invitation details...</p>
+                </div>
+              </Alert>
+            )}
+            
+            {/* Show invitation error */}
+            {invitationToken && invitationError && (
+              <Alert className="mb-4 bg-red-50 border-red-200">
+                <AlertTitle className="text-red-700 font-medium">
+                  Invalid or Expired Invitation
+                </AlertTitle>
+                <AlertDescription className="text-red-600 text-sm">
+                  This invitation is no longer valid or has expired. Please contact the project owner for a new invitation.
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <Tabs 
               defaultValue="login" 
               value={activeTab}

@@ -4,6 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertEntrySchema, Entry } from "@shared/schema";
 import { X, Paperclip, Upload, MapPin, Search, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "@/hooks/use-debounce";
 import { 
   Dialog, 
   DialogContent, 
@@ -26,9 +28,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import MapComponent from "@/components/map/map-component";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import opencage from "opencage-api-client";
-import { useToast } from "@/hooks/use-toast";
 
 interface NewEntryModalProps {
   isOpen: boolean;
@@ -45,9 +46,8 @@ const formSchema = insertEntrySchema
   .extend({
     title: z.string().min(1, "Title is required"),
     description: z.string().optional(),
-    // File uploads would be handled differently in production
-    imageFile: z.any().optional(),
-    audioFile: z.any().optional(),
+    // File uploads are handled differently
+    mediaFile: z.any().optional(),
   });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -63,6 +63,11 @@ const NewEntryModal = ({
   const { toast } = useToast();
   const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(null);
   const [addressSearch, setAddressSearch] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState<Array<{
+    description: string;
+    place_id: string;
+  }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -74,11 +79,35 @@ const NewEntryModal = ({
       links: [],
       mediaUrlImage: "",
       mediaUrlAudio: "",
-      imageFile: undefined,
-      audioFile: undefined,
+      mediaFile: undefined,
     },
   });
   
+  // Address suggestion mutation
+  const suggestAddressMutation = useMutation({
+    mutationFn: async (query: string) => {
+      if (!query.trim() || query.length < 3) return [];
+      
+      // Make a request to get address suggestions from the server
+      const res = await fetch(`/api/address-suggest?query=${encodeURIComponent(query)}`);
+      
+      if (!res.ok) {
+        throw new Error("Failed to get address suggestions");
+      }
+      
+      const suggestions = await res.json();
+      return suggestions.results || [];
+    },
+    onSuccess: (data) => {
+      setSearchSuggestions(data);
+      setShowSuggestions(data.length > 0);
+    },
+    onError: () => {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    }
+  });
+
   // Geocoding mutation
   const geocodeMutation = useMutation({
     mutationFn: async (address: string) => {
@@ -104,6 +133,7 @@ const NewEntryModal = ({
       setSelectedLocation([lat, lng]);
       form.setValue("latitude", lat.toString());
       form.setValue("longitude", lng.toString());
+      setShowSuggestions(false);
       toast({
         title: "Location found",
         description: `Found location: ${data.formatted}`,
@@ -117,6 +147,18 @@ const NewEntryModal = ({
       });
     },
   });
+  
+  // Use our debounce hook for address searching
+  const debouncedAddressSearch = useDebounce(addressSearch, 300);
+  
+  // Handle address input change with debounce
+  useEffect(() => {
+    if (debouncedAddressSearch.trim().length >= 3) {
+      suggestAddressMutation.mutate(debouncedAddressSearch);
+    } else {
+      setShowSuggestions(false);
+    }
+  }, [debouncedAddressSearch]);
 
   // Set form values when editing an entry
   useEffect(() => {
@@ -129,6 +171,7 @@ const NewEntryModal = ({
         links: editEntry.links || [],
         mediaUrlImage: editEntry.mediaUrlImage || "",
         mediaUrlAudio: editEntry.mediaUrlAudio || "",
+        mediaFile: undefined,
       });
 
       if (editEntry.latitude && editEntry.longitude) {
@@ -146,8 +189,7 @@ const NewEntryModal = ({
         links: [],
         mediaUrlImage: "",
         mediaUrlAudio: "",
-        imageFile: undefined,
-        audioFile: undefined,
+        mediaFile: undefined,
       });
       setSelectedLocation(null);
     }
@@ -160,33 +202,120 @@ const NewEntryModal = ({
   };
 
   const handleUseMyLocation = () => {
+    toast({
+      title: "Accessing GPS...",
+      description: "Getting your current location",
+    });
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         setSelectedLocation([latitude, longitude]);
         form.setValue("latitude", latitude.toString());
         form.setValue("longitude", longitude.toString());
+        
+        // Reverse geocode to get address for better context
+        geocodeMutation.mutate(`${latitude},${longitude}`);
+        
+        toast({
+          title: "Location found",
+          description: "Successfully retrieved your GPS coordinates",
+        });
       },
       (error) => {
         console.error("Error getting location:", error);
+        
+        let errorMessage = "Failed to get your location";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location access denied. Please enable location permissions in your browser settings.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information is unavailable. Try again later.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out. Try again.";
+            break;
+        }
+        
+        toast({
+          title: "GPS Error",
+          description: errorMessage,
+          variant: "destructive"
+        });
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 10000,
+        maximumAge: 0
       }
     );
   };
 
-  const handleSubmit = (data: FormValues) => {
-    // In a real app, we would handle file uploads here
-    // For now, we'll just simulate it
-    const formData = {
-      ...data,
-      projectId,
-      createdById: userId,
-      // In a production app, these would be URLs returned from the file upload process
-      mediaUrlImage: data.imageFile ? URL.createObjectURL(data.imageFile) : data.mediaUrlImage,
-      mediaUrlAudio: data.audioFile ? URL.createObjectURL(data.audioFile) : data.mediaUrlAudio,
-    };
-    
-    onSubmit(formData);
-    onClose();
+  const handleSubmit = async (data: FormValues) => {
+    try {
+      // Handle media file upload if present
+      let mediaUrlImage = data.mediaUrlImage;
+      let mediaUrlAudio = data.mediaUrlAudio;
+      
+      if (data.mediaFile) {
+        const file = data.mediaFile;
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+        
+        // Validate file size
+        if (file.size > MAX_SIZE) {
+          toast({
+            title: "File too large",
+            description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.type.split('/')[0]}`);
+        }
+        
+        const result = await response.json();
+        
+        // Determine file type from MIME type and store in appropriate field
+        if (file.type.startsWith('image/')) {
+          mediaUrlImage = result.filePath;
+        } else {
+          // Audio, video, or text file
+          mediaUrlAudio = result.filePath;
+        }
+      }
+      
+      // Submit the entry with proper file URLs
+      const formData = {
+        ...data,
+        projectId,
+        createdById: userId,
+        mediaUrlImage,
+        mediaUrlAudio,
+      };
+      
+      onSubmit(formData);
+      onClose();
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      toast({
+        title: "Error saving entry",
+        description: error instanceof Error ? error.message : "Failed to save entry with uploads",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -239,28 +368,80 @@ const NewEntryModal = ({
             <div className="space-y-2">
               <FormLabel>Location</FormLabel>
               
-              {/* Address search input */}
-              <div className="flex gap-2 mb-2">
-                <Input
-                  placeholder="Search address or place"
-                  value={addressSearch}
-                  onChange={(e) => setAddressSearch(e.target.value)}
-                  className="flex-1"
-                />
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="px-3 py-2 flex items-center justify-center" 
-                  onClick={() => geocodeMutation.mutate(addressSearch)}
-                  disabled={!addressSearch || geocodeMutation.isPending}
-                  title="Search for address"
-                >
-                  {geocodeMutation.isPending ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Search className="h-5 w-5" />
-                  )}
-                </Button>
+              {/* Address search input with context-aware suggestions */}
+              <div className="relative">
+                <div className="mb-1 flex items-center gap-1 text-xs text-gray-500">
+                  <Search className="h-3 w-3" />
+                  <span>Type at least 3 characters for location suggestions</span>
+                </div>
+                <div className="flex gap-2 mb-2">
+                  <div className="relative flex-1">
+                    <Input
+                      placeholder="Search address or place"
+                      value={addressSearch}
+                      onChange={(e) => setAddressSearch(e.target.value)}
+                      className="pr-8"
+                      onFocus={() => {
+                        if (searchSuggestions.length > 0) {
+                          setShowSuggestions(true);
+                        }
+                      }}
+                      onBlur={() => {
+                        // Small delay to allow clicking on suggestions
+                        setTimeout(() => setShowSuggestions(false), 200);
+                      }}
+                    />
+                    {suggestAddressMutation.isPending && (
+                      <Loader2 className="h-4 w-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    )}
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="px-3 py-2 flex items-center justify-center" 
+                    onClick={() => geocodeMutation.mutate(addressSearch)}
+                    disabled={!addressSearch || geocodeMutation.isPending}
+                    title="Search for address"
+                  >
+                    {geocodeMutation.isPending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Search className="h-5 w-5" />
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Address suggestions dropdown */}
+                {showSuggestions && searchSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    <div className="p-2 text-xs text-gray-500 border-b border-gray-100">
+                      Suggestions based on your search
+                    </div>
+                    <ul className="py-1">
+                      {searchSuggestions.map((suggestion, index) => (
+                        <li 
+                          key={suggestion.place_id || index}
+                          className="px-4 py-3 text-sm hover:bg-gray-100 active:bg-gray-200 cursor-pointer flex items-center gap-2"
+                          onClick={() => {
+                            setAddressSearch(suggestion.description);
+                            geocodeMutation.mutate(suggestion.description);
+                            setShowSuggestions(false);
+                          }}
+                          // Added touch events for better mobile experience
+                          onTouchStart={() => {}}
+                          onTouchEnd={() => {
+                            setAddressSearch(suggestion.description);
+                            geocodeMutation.mutate(suggestion.description);
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                          <span className="line-clamp-2">{suggestion.description}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
               
               <div className="flex gap-2">
@@ -298,12 +479,13 @@ const NewEntryModal = ({
                 />
                 <Button 
                   type="button" 
-                  variant="outline" 
-                  className="px-3 py-2 flex items-center justify-center" 
+                  variant="secondary" 
+                  className="px-2 sm:px-3 py-2 flex items-center justify-center gap-1" 
                   onClick={handleUseMyLocation}
-                  title="Use my location"
+                  title="Use GPS location from your device"
                 >
-                  <MapPin className="h-5 w-5" />
+                  <MapPin className="h-4 w-4" />
+                  <span className="text-[10px] sm:text-xs whitespace-nowrap">Use GPS</span>
                 </Button>
               </div>
               
@@ -321,86 +503,72 @@ const NewEntryModal = ({
             </div>
             
             <div className="space-y-2">
-              <FormLabel>Media</FormLabel>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="imageFile"
-                  render={({ field: { value, onChange, ...fieldProps } }) => (
-                    <FormItem>
-                      <FormControl>
-                        <div className="border-2 border-dashed border-gray-300 rounded-md p-6 flex flex-col items-center">
-                          <label 
-                            htmlFor="image-upload" 
-                            className="cursor-pointer flex flex-col items-center"
-                          >
-                            <Upload className="w-8 h-8 text-gray-400" />
-                            <p className="mt-1 text-sm text-gray-500">Upload image</p>
-                            <input
-                              id="image-upload"
-                              type="file"
-                              className="hidden"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  onChange(file);
+              <FormLabel>Media (Max 100MB per entry)</FormLabel>
+              <FormField
+                control={form.control}
+                name="mediaFile"
+                render={({ field: { value, onChange, ...fieldProps } }) => (
+                  <FormItem>
+                    <FormControl>
+                      <div className="border-2 border-dashed border-gray-300 rounded-md p-6 flex flex-col items-center">
+                        <label 
+                          htmlFor="media-upload" 
+                          className="cursor-pointer flex flex-col items-center"
+                        >
+                          <Upload className="w-8 h-8 text-gray-400" />
+                          <p className="mt-1 text-sm text-gray-500">Upload media</p>
+                          <p className="text-xs text-gray-400 text-center">
+                            Images: JPG, PNG, GIF, WebP, SVG
+                          </p>
+                          <p className="text-xs text-gray-400 text-center">
+                            Other: Audio, Video, Text files
+                          </p>
+                          <input
+                            id="media-upload"
+                            type="file"
+                            className="hidden"
+                            accept="image/*,audio/*,video/*,text/plain"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                // Show file size 
+                                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                                if (file.size > 100 * 1024 * 1024) {
+                                  toast({
+                                    title: "File too large",
+                                    description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
+                                    variant: "destructive"
+                                  });
+                                  return;
                                 }
-                              }}
-                              {...fieldProps}
-                            />
-                          </label>
-                          {(value || form.watch("mediaUrlImage")) && (
-                            <div className="mt-2 text-xs text-green-600">
-                              {value?.name || "Image uploaded"}
-                            </div>
-                          )}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="audioFile"
-                  render={({ field: { value, onChange, ...fieldProps } }) => (
-                    <FormItem>
-                      <FormControl>
-                        <div className="border-2 border-dashed border-gray-300 rounded-md p-6 flex flex-col items-center">
-                          <label 
-                            htmlFor="audio-upload" 
-                            className="cursor-pointer flex flex-col items-center"
-                          >
-                            <Paperclip className="w-8 h-8 text-gray-400" />
-                            <p className="mt-1 text-sm text-gray-500">Upload audio</p>
-                            <input
-                              id="audio-upload"
-                              type="file"
-                              className="hidden"
-                              accept="audio/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  onChange(file);
-                                }
-                              }}
-                              {...fieldProps}
-                            />
-                          </label>
-                          {(value || form.watch("mediaUrlAudio")) && (
-                            <div className="mt-2 text-xs text-green-600">
-                              {value?.name || "Audio uploaded"}
-                            </div>
-                          )}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                                onChange(file);
+                              }
+                            }}
+                            {...fieldProps}
+                          />
+                        </label>
+                        {value && (
+                          <div className="mt-2 text-xs text-green-600">
+                            {value.name} ({(value.size / (1024 * 1024)).toFixed(2)}MB)
+                            <p className="text-xs text-gray-500">
+                              {value.type.startsWith('image/') ? 'Image' : 
+                               value.type.startsWith('audio/') ? 'Audio' : 
+                               value.type.startsWith('video/') ? 'Video' : 'Text'} file
+                            </p>
+                          </div>
+                        )}
+                        {(!value && (form.watch("mediaUrlImage") || form.watch("mediaUrlAudio"))) && (
+                          <div className="mt-2 text-xs text-green-600">
+                            Media already uploaded
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <p className="text-xs text-gray-500 mt-1">Maximum file size is 100MB.</p>
             </div>
             
             <FormField

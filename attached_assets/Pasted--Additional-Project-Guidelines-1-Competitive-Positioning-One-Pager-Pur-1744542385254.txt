@@ -1,0 +1,87 @@
+
+# 📌 Additional Project Guidelines
+
+---
+
+## 1. 🧭 Competitive Positioning One-Pager
+
+### Purpose
+To clarify where this app stands in the landscape of investigative and mapping tools.
+
+### Key Points:
+- **Target Users**: Hobbyist investigators, mystery solvers, map-data geeks.
+- **Competitors**:
+  - Reddit communities (r/UnresolvedMysteries, r/TrueCrime)
+  - Google My Maps (limited collaboration, not designed for investigation)
+  - Obsidian + plugins (note-based, no mapping UI)
+  - ArcGIS StoryMaps (too academic/corporate)
+- **Our Advantage**:
+  - Purpose-built for intuitive investigative mapping
+  - Vibe-first UX — fun, curious, slightly conspiratorial
+  - Mobile/desktop parity
+  - Collaboration with minimal friction
+  - Rich entries with multimedia and geolocation
+
+---
+
+## 2. 💬 FAQ (for Users)
+
+### Q: Who is this for?
+A: Amateur sleuths, hobbyist case trackers, armchair detectives, and curious data wranglers.
+
+### Q: Is this just for true crime?
+A: Nope — it can be used for mystery spots, urban legends, folklore, or just tracking weird events in your area.
+
+### Q: Can I share a project with my friends?
+A: Yes! You can invite collaborators via email or generate a shareable link with edit access.
+
+### Q: Do I need to know coding?
+A: Not at all. It’s all visual and designed for regular users.
+
+### Q: Will my entries be private?
+A: By default, yes. Only shared projects are visible to others.
+
+---
+
+## 3. 📚 Documentation & Tutorial
+
+### Tech Stack (MVP)
+- **Frontend**: React + Next.js, Tailwind CSS, Mapbox GL JS
+- **Backend**: Node.js + Express, PostgreSQL (via Prisma), Supabase Auth
+- **Storage**: Cloudinary or Firebase for media
+- **Deployment**: Vercel (frontend), Railway/Supabase (backend)
+
+### Basic Tutorial
+
+#### 🛠️ Create an Account
+- Go to the login/signup page.
+- Enter your email and create a password.
+
+#### 🧭 Start a New Investigation
+- Click "New Project."
+- Add a project title and description.
+
+#### 📍 Add an Entry
+- Tap on the map to place a pin.
+- Fill out the entry form with a title, description (Markdown supported), and optional media.
+- Submit to save it to your project.
+
+#### 👥 Invite Collaborators
+- Go to the project settings.
+- Enter your friend’s email and send an invite.
+- Or copy a shareable edit link.
+
+#### 📲 Mobile Tips
+- Tap and hold to drop pins.
+- Use device GPS to quickly place geolocated entries.
+- Swipe up from the map to see your entry list.
+
+### Notes for Devs
+- API routes follow RESTful convention.
+- Media uploads return cloud-hosted URLs.
+- All entries scoped by project and user.
+- Collaboration uses a simple permissions table.
+
+---
+
+Let me know if you want diagrams or a video walkthrough version!

@@ -26,6 +26,8 @@ export const projects = pgTable("projects", {
   description: text("description"),
   ownerId: integer("owner_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  archived: boolean("archived").default(false),
+  archivedAt: timestamp("archived_at"),
 });
 
 export const insertProjectSchema = createInsertSchema(projects).pick({
@@ -46,6 +48,26 @@ export const insertProjectCollaboratorSchema = createInsertSchema(projectCollabo
   projectId: true,
   userId: true,
   role: true,
+});
+
+// Project Invitations
+export const projectInvitations = pgTable("project_invitations", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  email: text("email").notNull(),
+  role: text("role").notNull().default("editor"),
+  token: text("token").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"),
+  status: text("status").notNull().default("pending"), // "pending", "accepted", "expired"
+});
+
+export const insertProjectInvitationSchema = createInsertSchema(projectInvitations).pick({
+  projectId: true,
+  email: true,
+  role: true,
+  token: true,
+  expiresAt: true,
 });
 
 // Entries
@@ -85,6 +107,9 @@ export type InsertProject = z.infer<typeof insertProjectSchema>;
 
 export type ProjectCollaborator = typeof projectCollaborators.$inferSelect;
 export type InsertProjectCollaborator = z.infer<typeof insertProjectCollaboratorSchema>;
+
+export type ProjectInvitation = typeof projectInvitations.$inferSelect;
+export type InsertProjectInvitation = z.infer<typeof insertProjectInvitationSchema>;
 
 export type Entry = typeof entries.$inferSelect;
 export type InsertEntry = z.infer<typeof insertEntrySchema>;

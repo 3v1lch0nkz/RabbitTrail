@@ -3,12 +3,14 @@ import {
   Project, InsertProject, 
   Entry, InsertEntry,
   ProjectCollaborator, InsertProjectCollaborator,
-  users, projects, projectCollaborators, entries
+  ProjectInvitation, InsertProjectInvitation,
+  users, projects, projectCollaborators, entries, projectInvitations
 } from "@shared/schema";
+import crypto from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { db, pool } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, SQL } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
 const MemoryStore = createMemoryStore(session);
@@ -20,6 +22,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<User>): Promise<User>;
   
   // Project methods
   getProject(id: number): Promise<Project | undefined>;
@@ -40,6 +43,13 @@ export interface IStorage {
   getProjectCollaborators(projectId: number): Promise<(ProjectCollaborator & { user: User })[]>;
   addProjectCollaborator(collaborator: InsertProjectCollaborator): Promise<ProjectCollaborator>;
   removeProjectCollaborator(projectId: number, userId: number): Promise<void>;
+  
+  // Invitation methods
+  createProjectInvitation(invitation: Omit<InsertProjectInvitation, "token"> & { invitedBy: number }): Promise<ProjectInvitation>;
+  getProjectInvitations(projectId: number): Promise<ProjectInvitation[]>;
+  getInvitationByToken(token: string): Promise<ProjectInvitation | undefined>;
+  updateInvitationStatus(id: number, status: string): Promise<void>;
+  getInvitationByEmail(projectId: number, email: string): Promise<ProjectInvitation | undefined>;
   
   sessionStore: session.Store;
 }
@@ -96,6 +106,17 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUser(id: number, updateData: Partial<User>): Promise<User> {
+    const user = this.users.get(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    const updatedUser = { ...user, ...updateData };
+    this.users.set(id, updatedUser);
+    return updatedUser;
   }
 
   // Project methods
@@ -282,6 +303,67 @@ export class DatabaseStorage implements IStorage {
       createTableIfMissing: true
     });
   }
+  
+  // Invitation methods
+  async createProjectInvitation(
+    invitation: Omit<InsertProjectInvitation, "token"> & { invitedBy: number }
+  ): Promise<ProjectInvitation> {
+    // Generate a secure random token
+    const token = Buffer.from(crypto.randomUUID().replace(/-/g, '')).toString('hex');
+    
+    // Set default expiration 7 days from now if not provided
+    const expiresAt = invitation.expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    
+    const invitationWithToken = {
+      projectId: invitation.projectId,
+      email: invitation.email,
+      role: invitation.role || 'editor',
+      token,
+      expiresAt
+    };
+    
+    const [createdInvitation] = await db
+      .insert(projectInvitations)
+      .values(invitationWithToken)
+      .returning();
+    
+    return createdInvitation;
+  }
+  
+  async getProjectInvitations(projectId: number): Promise<ProjectInvitation[]> {
+    return db
+      .select()
+      .from(projectInvitations)
+      .where(eq(projectInvitations.projectId, projectId));
+  }
+  
+  async getInvitationByToken(token: string): Promise<ProjectInvitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(projectInvitations)
+      .where(eq(projectInvitations.token, token));
+    
+    return invitation;
+  }
+  
+  async updateInvitationStatus(id: number, status: string): Promise<void> {
+    await db
+      .update(projectInvitations)
+      .set({ status })
+      .where(eq(projectInvitations.id, id));
+  }
+  
+  async getInvitationByEmail(projectId: number, email: string): Promise<ProjectInvitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(projectInvitations)
+      .where(and(
+        eq(projectInvitations.projectId, projectId),
+        eq(projectInvitations.email, email)
+      ));
+    
+    return invitation;
+  }
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
@@ -302,6 +384,20 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+  
+  async updateUser(id: number, updateData: Partial<User>): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning();
+    
+    if (!updatedUser) {
+      throw new Error("User not found");
+    }
+    
+    return updatedUser;
   }
 
   // Project methods
@@ -348,7 +444,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProject(insertProject: InsertProject): Promise<Project> {
-    const [project] = await db.insert(projects).values(insertProject).returning();
+    const projectWithDefaults = {
+      title: insertProject.title,
+      ownerId: insertProject.ownerId,
+      description: insertProject.description ?? null
+    };
+    
+    const [project] = await db.insert(projects).values(projectWithDefaults).returning();
     return project;
   }
 
@@ -426,9 +528,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEntry(insertEntry: InsertEntry): Promise<Entry> {
+    // Normalize NULL values for optional fields
+    const entryData = {
+      title: insertEntry.title,
+      projectId: insertEntry.projectId,
+      createdById: insertEntry.createdById,
+      description: insertEntry.description ?? null,
+      latitude: insertEntry.latitude ?? null,
+      longitude: insertEntry.longitude ?? null,
+      mediaUrlImage: insertEntry.mediaUrlImage ?? null,
+      mediaUrlAudio: insertEntry.mediaUrlAudio ?? null,
+      // Ensure links is properly converted to JSONB - null if not provided
+      links: insertEntry.links ? JSON.stringify(insertEntry.links) : null
+    };
+    
     const [entry] = await db
       .insert(entries)
-      .values(insertEntry)
+      .values(entryData)
       .returning();
     
     return entry;
@@ -436,10 +552,19 @@ export class DatabaseStorage implements IStorage {
 
   async updateEntry(id: number, updateData: Partial<Entry>): Promise<Entry> {
     const now = new Date();
+    
+    // Process the links field if it exists
+    const processedData = { ...updateData };
+    
+    if (processedData.links !== undefined) {
+      // If links is provided, stringify it for JSONB
+      processedData.links = processedData.links ? JSON.stringify(processedData.links) : null;
+    }
+    
     const [updatedEntry] = await db
       .update(entries)
       .set({
-        ...updateData,
+        ...processedData,
         updatedAt: now
       })
       .where(eq(entries.id, id))
@@ -490,9 +615,16 @@ export class DatabaseStorage implements IStorage {
       throw new Error("User is already a collaborator");
     }
     
+    // Normalize with default role if not provided
+    const collaboratorWithDefaults = {
+      projectId: insertCollaborator.projectId,
+      userId: insertCollaborator.userId,
+      role: insertCollaborator.role ?? 'editor'
+    };
+    
     const [collaborator] = await db
       .insert(projectCollaborators)
-      .values(insertCollaborator)
+      .values(collaboratorWithDefaults)
       .returning();
     
     return collaborator;

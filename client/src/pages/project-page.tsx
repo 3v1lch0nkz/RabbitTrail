@@ -13,7 +13,15 @@ import EntryList from "@/components/entries/entry-list";
 import MapComponent from "@/components/map/map-component";
 import NewEntryModal from "@/components/modals/new-entry-modal";
 import ShareProjectModal from "@/components/modals/share-project-modal";
+import ProjectActionsModal from "@/components/modals/project-actions-modal";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const ProjectPage = () => {
   const [match, params] = useRoute<{ id: string }>("/projects/:id");
@@ -22,6 +30,7 @@ const ProjectPage = () => {
   const projectId = parseInt(params?.id || "0");
   const [isNewEntryModalOpen, setIsNewEntryModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isProjectActionsModalOpen, setIsProjectActionsModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | undefined>(undefined);
   const [selectedEntry, setSelectedEntry] = useState<Entry | undefined>(undefined);
   const [mapCenter, setMapCenter] = useState<[number, number] | undefined>(undefined);
@@ -57,10 +66,13 @@ const ProjectPage = () => {
   // Fetch collaborators
   const {
     data: collaborators = []
-  } = useQuery<(User)[]>({
+  } = useQuery<User[]>({
     queryKey: [`/api/projects/${projectId}/collaborators`],
     enabled: !!projectId,
-    select: (data) => data.map(collab => collab.user),
+    // Transform the data to extract user objects
+    select: (data: any[]) => {
+      return data.map(collab => collab.user || collab);
+    },
   });
   
   // Center map on first entry if available
@@ -204,6 +216,11 @@ const ProjectPage = () => {
     setIsShareModalOpen(true);
   };
   
+  // Open project actions modal
+  const handleOpenProjectActionsModal = () => {
+    setIsProjectActionsModalOpen(true);
+  };
+  
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
@@ -240,17 +257,7 @@ const ProjectPage = () => {
                 center={mapCenter}
               />
               
-              {/* Add Entry Button (Mobile) */}
-              <div className="md:hidden absolute bottom-4 right-4">
-                <Button 
-                  className="rounded-full w-14 h-14 shadow-lg p-0"
-                  onClick={handleAddEntry}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                </Button>
-              </div>
+              {/* Map Controls positioned at bottom-right */}
             </div>
             
             {/* Entries Panel */}
@@ -263,6 +270,7 @@ const ProjectPage = () => {
                 onAddEntry={handleAddEntry}
                 onEditEntry={handleEditEntry}
                 onDeleteEntry={handleDeleteEntry}
+                onProjectActions={handleOpenProjectActionsModal}
               />
               
               {/* Project Collaborators Section */}
@@ -320,6 +328,15 @@ const ProjectPage = () => {
           onClose={() => setIsShareModalOpen(false)}
           project={project}
           currentUser={user}
+        />
+      )}
+      
+      {/* Project Actions Modal */}
+      {project && (
+        <ProjectActionsModal 
+          isOpen={isProjectActionsModalOpen}
+          onClose={() => setIsProjectActionsModalOpen(false)}
+          project={project}
         />
       )}
     </div>
