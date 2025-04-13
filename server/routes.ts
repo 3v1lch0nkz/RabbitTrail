@@ -716,6 +716,48 @@ app.get("/api/projects/:id/export", isAuthenticated, async (req, res) => {
       res.status(500).json({ message: "Failed to geocode address" });
     }
   });
+  
+  // Address suggestion endpoint for type-ahead search
+  app.get("/api/address-suggest", async (req, res) => {
+    try {
+      const query = req.query.query as string;
+      
+      if (!query || query.length < 3) {
+        return res.status(400).json({ 
+          message: "Query parameter is required and must be at least 3 characters" 
+        });
+      }
+      
+      if (!process.env.OPENCAGE_API_KEY) {
+        return res.status(500).json({ message: "Geocoding API key is not configured" });
+      }
+      
+      // Use OpenCage API for address suggestions
+      const result = await opencage.geocode({
+        q: query,
+        key: process.env.OPENCAGE_API_KEY,
+        limit: 5, // Limit to 5 suggestions
+        no_annotations: 1 // Reduce response size
+      });
+      
+      if (result.status.code !== 200) {
+        return res.status(result.status.code).json({ 
+          message: `Address suggestion error: ${result.status.message}` 
+        });
+      }
+      
+      // Transform results into a more suitable format for suggestions
+      const suggestions = result.results.map((item: any) => ({
+        description: item.formatted,
+        place_id: item.annotations?.geohash || String(Math.random())
+      }));
+      
+      res.json({ results: suggestions });
+    } catch (error) {
+      console.error("Address suggestion error:", error);
+      res.status(500).json({ message: "Failed to get address suggestions" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

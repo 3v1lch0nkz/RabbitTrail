@@ -202,15 +202,53 @@ const NewEntryModal = ({
   };
 
   const handleUseMyLocation = () => {
+    toast({
+      title: "Accessing GPS...",
+      description: "Getting your current location",
+    });
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         setSelectedLocation([latitude, longitude]);
         form.setValue("latitude", latitude.toString());
         form.setValue("longitude", longitude.toString());
+        
+        // Reverse geocode to get address for better context
+        geocodeMutation.mutate(`${latitude},${longitude}`);
+        
+        toast({
+          title: "Location found",
+          description: "Successfully retrieved your GPS coordinates",
+        });
       },
       (error) => {
         console.error("Error getting location:", error);
+        
+        let errorMessage = "Failed to get your location";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location access denied. Please enable location permissions in your browser settings.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information is unavailable. Try again later.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out. Try again.";
+            break;
+        }
+        
+        toast({
+          title: "GPS Error",
+          description: errorMessage,
+          variant: "destructive"
+        });
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 10000,
+        maximumAge: 0
       }
     );
   };
@@ -417,12 +455,13 @@ const NewEntryModal = ({
                 />
                 <Button 
                   type="button" 
-                  variant="outline" 
-                  className="px-3 py-2 flex items-center justify-center" 
+                  variant="secondary" 
+                  className="px-3 py-2 flex items-center justify-center gap-1" 
                   onClick={handleUseMyLocation}
-                  title="Use my location"
+                  title="Use GPS location from your device"
                 >
-                  <MapPin className="h-5 w-5" />
+                  <MapPin className="h-4 w-4" />
+                  <span className="text-xs sm:text-sm whitespace-nowrap">Use GPS</span>
                 </Button>
               </div>
               
