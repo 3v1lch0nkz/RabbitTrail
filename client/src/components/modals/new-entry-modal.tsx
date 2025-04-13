@@ -366,7 +366,7 @@ const NewEntryModal = ({
             </div>
             
             <div className="space-y-2">
-              <FormLabel>Media</FormLabel>
+              <FormLabel>Media (Max 100MB per entry)</FormLabel>
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -381,6 +381,7 @@ const NewEntryModal = ({
                           >
                             <Upload className="w-8 h-8 text-gray-400" />
                             <p className="mt-1 text-sm text-gray-500">Upload image</p>
+                            <p className="text-xs text-gray-400 text-center">JPG, PNG, GIF, WebP, SVG</p>
                             <input
                               id="image-upload"
                               type="file"
@@ -389,6 +390,16 @@ const NewEntryModal = ({
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
+                                  // Show file size 
+                                  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                                  if (file.size > 100 * 1024 * 1024) {
+                                    toast({
+                                      title: "File too large",
+                                      description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
+                                      variant: "destructive"
+                                    });
+                                    return;
+                                  }
                                   onChange(file);
                                 }
                               }}
