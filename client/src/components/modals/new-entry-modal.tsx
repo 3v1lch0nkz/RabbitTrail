@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertEntrySchema, Entry } from "@shared/schema";
 import { X, Paperclip, Upload, MapPin, Search, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Dialog, 
   DialogContent, 
@@ -28,7 +29,6 @@ import { Textarea } from "@/components/ui/textarea";
 import MapComponent from "@/components/map/map-component";
 import { useMutation } from "@tanstack/react-query";
 import opencage from "opencage-api-client";
-import { useToast } from "@/hooks/use-toast";
 
 interface NewEntryModalProps {
   isOpen: boolean;
@@ -175,6 +175,26 @@ const NewEntryModal = ({
 
   const handleSubmit = async (data: FormValues) => {
     try {
+      // Calculate total file size
+      const imageFileSize = data.imageFile ? data.imageFile.size : 0;
+      const audioFileSize = data.audioFile ? data.audioFile.size : 0;
+      const totalFileSize = imageFileSize + audioFileSize;
+      const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
+      
+      // Validate total file size
+      if (totalFileSize > MAX_TOTAL_SIZE) {
+        const imageSizeMB = (imageFileSize / (1024 * 1024)).toFixed(2);
+        const audioSizeMB = (audioFileSize / (1024 * 1024)).toFixed(2);
+        const totalSizeMB = (totalFileSize / (1024 * 1024)).toFixed(2);
+        
+        toast({
+          title: "Files too large",
+          description: `Total file size (${totalSizeMB}MB) exceeds the 100MB limit. Image: ${imageSizeMB}MB, Media: ${audioSizeMB}MB`,
+          variant: "destructive"
+        });
+        return;
+      }
+      
       // Handle image file upload if present
       let mediaUrlImage = data.mediaUrlImage;
       if (data.imageFile) {
@@ -194,7 +214,7 @@ const NewEntryModal = ({
         mediaUrlImage = result.filePath;
       }
       
-      // Handle audio file upload if present
+      // Handle media file upload if present (audio, video, text)
       let mediaUrlAudio = data.mediaUrlAudio;
       if (data.audioFile) {
         const formData = new FormData();
@@ -206,7 +226,7 @@ const NewEntryModal = ({
         });
         
         if (!response.ok) {
-          throw new Error('Failed to upload audio');
+          throw new Error(`Failed to upload ${data.audioFile.type.split('/')[0]}`);
         }
         
         const result = await response.json();
@@ -409,6 +429,7 @@ const NewEntryModal = ({
                           {(value || form.watch("mediaUrlImage")) && (
                             <div className="mt-2 text-xs text-green-600">
                               {value?.name || "Image uploaded"}
+                              {value && ` (${(value.size / (1024 * 1024)).toFixed(2)}MB)`}
                             </div>
                           )}
                         </div>
@@ -430,15 +451,26 @@ const NewEntryModal = ({
                             className="cursor-pointer flex flex-col items-center"
                           >
                             <Paperclip className="w-8 h-8 text-gray-400" />
-                            <p className="mt-1 text-sm text-gray-500">Upload audio</p>
+                            <p className="mt-1 text-sm text-gray-500">Upload media</p>
+                            <p className="text-xs text-gray-400 text-center">Audio, Video, Text files</p>
                             <input
                               id="audio-upload"
                               type="file"
                               className="hidden"
-                              accept="audio/*"
+                              accept="audio/*,video/*,text/plain"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
+                                  // Show file size 
+                                  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                                  if (file.size > 100 * 1024 * 1024) {
+                                    toast({
+                                      title: "File too large",
+                                      description: `File size is ${fileSizeMB}MB. Maximum allowed is 100MB.`,
+                                      variant: "destructive"
+                                    });
+                                    return;
+                                  }
                                   onChange(file);
                                 }
                               }}
@@ -447,7 +479,8 @@ const NewEntryModal = ({
                           </label>
                           {(value || form.watch("mediaUrlAudio")) && (
                             <div className="mt-2 text-xs text-green-600">
-                              {value?.name || "Audio uploaded"}
+                              {value?.name || "Media uploaded"}
+                              {value && ` (${(value.size / (1024 * 1024)).toFixed(2)}MB)`}
                             </div>
                           )}
                         </div>
@@ -457,6 +490,7 @@ const NewEntryModal = ({
                   )}
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-1">Total upload size per entry should be less than 100MB.</p>
             </div>
             
             <FormField
