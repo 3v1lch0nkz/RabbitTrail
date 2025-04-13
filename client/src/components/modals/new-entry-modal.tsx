@@ -5,6 +5,7 @@ import { z } from "zod";
 import { insertEntrySchema, Entry } from "@shared/schema";
 import { X, Paperclip, Upload, MapPin, Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "@/hooks/use-debounce";
 import { 
   Dialog, 
   DialogContent, 
@@ -27,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import MapComponent from "@/components/map/map-component";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import opencage from "opencage-api-client";
 
 interface NewEntryModalProps {
@@ -147,18 +148,17 @@ const NewEntryModal = ({
     },
   });
   
+  // Use our debounce hook for address searching
+  const debouncedAddressSearch = useDebounce(addressSearch, 300);
+  
   // Handle address input change with debounce
   useEffect(() => {
-    const debounceId = setTimeout(() => {
-      if (addressSearch.trim().length >= 3) {
-        suggestAddressMutation.mutate(addressSearch);
-      } else {
-        setShowSuggestions(false);
-      }
-    }, 300);
-    
-    return () => clearTimeout(debounceId);
-  }, [addressSearch]);
+    if (debouncedAddressSearch.trim().length >= 3) {
+      suggestAddressMutation.mutate(debouncedAddressSearch);
+    } else {
+      setShowSuggestions(false);
+    }
+  }, [debouncedAddressSearch]);
 
   // Set form values when editing an entry
   useEffect(() => {
