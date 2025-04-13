@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Entry, Project, User } from "@shared/schema";
 import { Search, ArrowUpDown, Plus, MoreVertical } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,6 +38,33 @@ const EntryList = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [viewType, setViewType] = useState<"list" | "timeline">("list");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
+  const [isFabVisible, setIsFabVisible] = useState(true);
+  const entriesListRef = useRef<HTMLDivElement>(null);
+  const lastScrollTop = useRef(0);
+  
+  // Scroll detection to show/hide FAB
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!entriesListRef.current) return;
+      
+      const { scrollTop } = entriesListRef.current;
+      // Determine scroll direction
+      if (scrollTop > lastScrollTop.current + 10) {
+        // Scrolling down - hide FAB
+        setIsFabVisible(false);
+      } else if (scrollTop < lastScrollTop.current - 10) {
+        // Scrolling up - show FAB
+        setIsFabVisible(true);
+      }
+      lastScrollTop.current = scrollTop <= 0 ? 0 : scrollTop;
+    };
+    
+    const entriesList = entriesListRef.current;
+    if (entriesList) {
+      entriesList.addEventListener('scroll', handleScroll, { passive: true });
+      return () => entriesList.removeEventListener('scroll', handleScroll);
+    }
+  }, []);
   
   // Find creator for each entry
   const getCreator = (createdById: number): User | undefined => {
@@ -134,7 +161,10 @@ const EntryList = ({
       </div>
       
       {/* Entries List */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-4">
+      <div 
+        ref={entriesListRef} 
+        className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-4"
+      >
         {isLoading ? (
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
@@ -181,7 +211,11 @@ const EntryList = ({
       </div>
       
       {/* Add Entry Button (Mobile) */}
-      <div className="md:hidden fixed bottom-20 right-4 z-50">
+      <div 
+        className={`md:hidden fixed bottom-20 right-4 z-50 transition-all duration-300 ${
+          isFabVisible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-16 pointer-events-none'
+        }`}
+      >
         <Button 
           className="rounded-full w-16 h-16 shadow-lg p-0 bg-primary hover:bg-primary/90"
           onClick={onAddEntry}
