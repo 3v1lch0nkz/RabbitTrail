@@ -173,20 +173,65 @@ const NewEntryModal = ({
     );
   };
 
-  const handleSubmit = (data: FormValues) => {
-    // In a real app, we would handle file uploads here
-    // For now, we'll just simulate it
-    const formData = {
-      ...data,
-      projectId,
-      createdById: userId,
-      // In a production app, these would be URLs returned from the file upload process
-      mediaUrlImage: data.imageFile ? URL.createObjectURL(data.imageFile) : data.mediaUrlImage,
-      mediaUrlAudio: data.audioFile ? URL.createObjectURL(data.audioFile) : data.mediaUrlAudio,
-    };
-    
-    onSubmit(formData);
-    onClose();
+  const handleSubmit = async (data: FormValues) => {
+    try {
+      // Handle image file upload if present
+      let mediaUrlImage = data.mediaUrlImage;
+      if (data.imageFile) {
+        const formData = new FormData();
+        formData.append('file', data.imageFile);
+        
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to upload image');
+        }
+        
+        const result = await response.json();
+        mediaUrlImage = result.filePath;
+      }
+      
+      // Handle audio file upload if present
+      let mediaUrlAudio = data.mediaUrlAudio;
+      if (data.audioFile) {
+        const formData = new FormData();
+        formData.append('file', data.audioFile);
+        
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to upload audio');
+        }
+        
+        const result = await response.json();
+        mediaUrlAudio = result.filePath;
+      }
+      
+      // Submit the entry with proper file URLs
+      const formData = {
+        ...data,
+        projectId,
+        createdById: userId,
+        mediaUrlImage,
+        mediaUrlAudio,
+      };
+      
+      onSubmit(formData);
+      onClose();
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      toast({
+        title: "Error saving entry",
+        description: error instanceof Error ? error.message : "Failed to save entry with uploads",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

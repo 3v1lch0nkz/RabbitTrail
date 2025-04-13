@@ -157,8 +157,18 @@ export default function EntryDetailModal({ entry, onClose }: EntryDetailModalPro
                 <div className="mb-4">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Audio Recording</h4>
                   <div className="bg-gray-100 p-3 rounded-lg">
-                    <audio controls className="w-full">
-                      <source src={entry.mediaUrlAudio} type="audio/mpeg" />
+                    <audio 
+                      controls 
+                      className="w-full"
+                      src={entry.mediaUrlAudio.startsWith('http') ? entry.mediaUrlAudio : entry.mediaUrlAudio}
+                      onError={(e) => {
+                        const target = e.target as HTMLAudioElement;
+                        // If the audio fails to load directly, check if it might be a relative path
+                        if (!target.src.startsWith('http') && !target.src.startsWith('/')) {
+                          target.src = `/${target.src}`;
+                        }
+                      }}
+                    >
                       Your browser does not support the audio element.
                     </audio>
                   </div>
@@ -170,9 +180,16 @@ export default function EntryDetailModal({ entry, onClose }: EntryDetailModalPro
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Image</h4>
                   <div className="overflow-hidden rounded-lg border border-gray-200">
                     <img 
-                      src={entry.mediaUrlImage} 
+                      src={entry.mediaUrlImage.startsWith('http') ? entry.mediaUrlImage : entry.mediaUrlImage} 
                       alt={entry.title} 
                       className="w-full h-auto object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        // If the image fails to load directly, check if it might be a relative path
+                        if (!target.src.startsWith('http') && !target.src.startsWith('/')) {
+                          target.src = `/${target.src}`;
+                        }
+                      }}
                     />
                   </div>
                 </div>
