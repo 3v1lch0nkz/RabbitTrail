@@ -368,20 +368,33 @@ const NewEntryModal = ({
             <div className="space-y-2">
               <FormLabel>Location</FormLabel>
               
-              {/* Address search input */}
+              {/* Address search input with context-aware suggestions */}
               <div className="relative">
+                <div className="mb-1 flex items-center gap-1 text-xs text-gray-500">
+                  <Search className="h-3 w-3" />
+                  <span>Type at least 3 characters for location suggestions</span>
+                </div>
                 <div className="flex gap-2 mb-2">
-                  <Input
-                    placeholder="Search address or place"
-                    value={addressSearch}
-                    onChange={(e) => setAddressSearch(e.target.value)}
-                    className="flex-1"
-                    onFocus={() => showSuggestions && setShowSuggestions(true)}
-                    onBlur={() => {
-                      // Small delay to allow clicking on suggestions
-                      setTimeout(() => setShowSuggestions(false), 200);
-                    }}
-                  />
+                  <div className="relative flex-1">
+                    <Input
+                      placeholder="Search address or place"
+                      value={addressSearch}
+                      onChange={(e) => setAddressSearch(e.target.value)}
+                      className="pr-8"
+                      onFocus={() => {
+                        if (searchSuggestions.length > 0) {
+                          setShowSuggestions(true);
+                        }
+                      }}
+                      onBlur={() => {
+                        // Small delay to allow clicking on suggestions
+                        setTimeout(() => setShowSuggestions(false), 200);
+                      }}
+                    />
+                    {suggestAddressMutation.isPending && (
+                      <Loader2 className="h-4 w-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    )}
+                  </div>
                   <Button 
                     type="button" 
                     variant="outline" 
@@ -400,19 +413,23 @@ const NewEntryModal = ({
                 
                 {/* Address suggestions dropdown */}
                 {showSuggestions && searchSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    <div className="p-2 text-xs text-gray-500 border-b border-gray-100">
+                      Suggestions based on your search
+                    </div>
                     <ul className="py-1">
                       {searchSuggestions.map((suggestion, index) => (
                         <li 
                           key={suggestion.place_id || index}
-                          className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+                          className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer flex items-center gap-2"
                           onClick={() => {
                             setAddressSearch(suggestion.description);
                             geocodeMutation.mutate(suggestion.description);
                             setShowSuggestions(false);
                           }}
                         >
-                          {suggestion.description}
+                          <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                          <span className="line-clamp-2">{suggestion.description}</span>
                         </li>
                       ))}
                     </ul>
